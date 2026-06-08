@@ -1174,9 +1174,15 @@
                  style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px"
                  title="-1 = all cores, 1 = single, 4 = 4 cores">
         </div>
+        <div style="flex:1">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Parallel combos</div>
+          <input type="number" id="tune-parallel-combos" value="1" min="1" max="16"
+                 style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px"
+                 title="How many feature combinations to test simultaneously in Phase 1">
+        </div>
       </div>
       <div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.5">
-        CPU threads: <b>-1</b> = all cores (fastest), or set exact number. Distributed: each machine gets a different subset of combos.
+        <b>CPU threads</b>: -1 = all cores per combo. <b>Parallel combos</b>: how many combos test simultaneously — each gets CPU/parallel slice. Best: set CPU threads = total_cores / parallel_combos.<br>Parallel combos work <i>within</i> your machine's assigned subset (Total machines split happens first, then parallel combos split that subset further).
       </div>
 
       <div style="display:flex;gap:8px;margin-top:8px">
@@ -3196,7 +3202,13 @@ function setupTuningUI(data) {
       const ok = nr <= 0.4;
       const pct = Math.round(nr * 100);
       const nb = pct > 0 ? '<span style="font-size:10px;color:'+(pct>40?'var(--danger)':'var(--text3)')+';margin-left:4px">'+pct+'% null</span>' : '';
-      list.innerHTML += '<label class="check-item" style="'+(ok?'':'opacity:0.5')+'"><input type="checkbox" value="'+col+'" '+(ok?'checked':'')+' onchange="updateTuneEstimate()">'+col+nb+'</label>';
+      const lbl = document.createElement('label');
+      lbl.className = 'check-item';
+      lbl.style.cssText = (ok ? '' : 'opacity:0.5') + ';display:flex;align-items:center;justify-content:space-between;gap:4px';
+      lbl.innerHTML = '<span style="display:flex;align-items:center;gap:4px;flex:1"><input type="checkbox" value="'+col+'" '+(ok?'checked':'')+' onchange="updateTuneEstimate()"> '+col+nb+'</span>'
+        + '<button type="button" title="Mark as required (always included in every combination)" onclick="toggleRequired(this,event)"'
+        + ' style="padding:0 5px;height:18px;background:transparent;border:1px solid var(--border2);border-radius:4px;cursor:pointer;font-size:10px;color:var(--text3);flex-shrink:0">pin</button>';
+      list.appendChild(lbl);
     });
   setTimeout(() => {
     // Auto-restore saved preset (after checkboxes are built)
@@ -3213,13 +3225,50 @@ function setupTuningUI(data) {
         if (p.target) { const s = document.getElementById('tune-target'); if(s) s.value = p.target; }
         if (p.minF)   { const s = document.getElementById('tune-min-features'); if(s) s.value = p.minF; }
         if (p.maxF)   { const s = document.getElementById('tune-max-features'); if(s) s.value = p.maxF; }
+        if (p.parC)   { const s = document.getElementById('tune-parallel-combos'); if(s) s.value = p.parC; }
+        if (p.nJobs)  { const s = document.getElementById('tune-n-jobs');          if(s) s.value = p.nJobs; }
+        if (p.nWork)  { const s = document.getElementById('tune-n-workers');       if(s) s.value = p.nWork; updateWorkerOptions(); }
+        if (p.wId)    { const s = document.getElementById('tune-worker-id');       if(s) s.value = p.wId; }
+        if (p.required?.length) {
+          const reqSet = new Set(p.required);
+          document.querySelectorAll('#tune-feature-list input').forEach(cb => {
+            if (reqSet.has(cb.value)) { cb.dataset.required = '1'; cb.checked = true; markRequiredLabel(cb); }
+          });
+        }
       } catch(e) {}
     }
     updateTuneEstimate();
   }, 100);
 }
 function tuneCheckAll(state) {
-  document.querySelectorAll('#tune-feature-list input').forEach(cb => cb.checked = state);
+  document.querySelectorAll('#tune-feature-list input[type=checkbox]').forEach(cb => {
+    if (cb.dataset.required !== '1') cb.checked = state;
+  });
+}
+
+function markRequiredLabel(cb) {
+  const lbl = cb.closest('label');
+  const btn = lbl?.querySelector('button');
+  if (!lbl) return;
+  const isReq = cb.dataset.required === '1';
+  lbl.style.background = isReq ? 'var(--accent3)22' : '';
+  lbl.style.borderColor = isReq ? 'var(--accent3)' : '';
+  if (btn) { btn.textContent = isReq ? '📌' : 'pin'; btn.style.color = isReq ? 'var(--accent3)' : 'var(--text3)'; }
+  if (isReq) { cb.checked = true; cb.disabled = true; }
+  else        { cb.disabled = false; }
+}
+
+function toggleRequired(btn, e) {
+  e.stopPropagation(); e.preventDefault();
+  const cb = btn.closest('label')?.querySelector('input[type=checkbox]');
+  if (!cb) return;
+  cb.dataset.required = cb.dataset.required === '1' ? '0' : '1';
+  markRequiredLabel(cb);
+  updateTuneEstimate();
+}
+
+function getRequiredFeatures() {
+  return [...document.querySelectorAll('#tune-feature-list input[data-required="1"]')].map(c => c.value);
 }
 function runTuning() {
   const target = document.getElementById('tune-target').value;
@@ -3246,6 +3295,8 @@ function runTuning() {
       use_log_target: document.getElementById('tune-log').checked,
       remove_outliers: document.getElementById('tune-outliers').checked,
       worker_id: wp.worker_id, n_workers: wp.n_workers, n_jobs: wp.n_jobs,
+      parallel_combos: parseInt(document.getElementById('tune-parallel-combos').value) || 1,
+      required_features: getRequiredFeatures(),
     })
   }).then(r=>r.json()).then(d => {
     if (d.error) { showToast(d.error,'error'); resetTuneBtn(); return; }
@@ -3429,7 +3480,12 @@ function saveTunePreset() {
   const target  = document.getElementById('tune-target')?.value || '';
   const minF    = document.getElementById('tune-min-features')?.value || '1';
   const maxF    = document.getElementById('tune-max-features')?.value || '4';
-  localStorage.setItem('realtyiq_tune_preset', JSON.stringify({ checked, target, minF, maxF }));
+  const parC    = document.getElementById('tune-parallel-combos')?.value || '1';
+  const nJobs   = document.getElementById('tune-n-jobs')?.value || '-1';
+  const nWork   = document.getElementById('tune-n-workers')?.value || '1';
+  const wId     = document.getElementById('tune-worker-id')?.value || '1';
+  const reqd    = [...document.querySelectorAll('#tune-feature-list input[data-required="1"]')].map(c => c.value);
+  localStorage.setItem('realtyiq_tune_preset', JSON.stringify({ checked, target, minF, maxF, parC, nJobs, nWork, wId, required: reqd }));
   showToast('Tuning preset saved', 'success');
 }
 function restoreTunePreset() {
@@ -3442,6 +3498,17 @@ function restoreTunePreset() {
     if (p.target) { const s = document.getElementById('tune-target'); if(s) s.value = p.target; }
     if (p.minF)   { const s = document.getElementById('tune-min-features'); if(s) s.value = p.minF; }
     if (p.maxF)   { const s = document.getElementById('tune-max-features'); if(s) s.value = p.maxF; }
+    if (p.parC)   { const s = document.getElementById('tune-parallel-combos'); if(s) s.value = p.parC; }
+    if (p.nJobs)  { const s = document.getElementById('tune-n-jobs');          if(s) s.value = p.nJobs; }
+    if (p.nWork)  { const s = document.getElementById('tune-n-workers');       if(s) s.value = p.nWork; updateWorkerOptions(); }
+    if (p.wId)    { const s = document.getElementById('tune-worker-id');       if(s) s.value = p.wId; }
+    // Restore required flags
+    if (p.required?.length) {
+      const reqSet = new Set(p.required);
+      document.querySelectorAll('#tune-feature-list input').forEach(cb => {
+        if (reqSet.has(cb.value)) { cb.dataset.required = '1'; cb.checked = true; markRequiredLabel(cb); }
+      });
+    }
     showToast('Restored: ' + (p.checked?.length||0) + ' features', 'success');
   } catch(e) { showToast('Could not restore', 'error'); }
 }

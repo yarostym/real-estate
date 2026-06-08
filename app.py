@@ -1617,7 +1617,8 @@ def tune_model():
     candidate_cols = data.get('feature_columns', [])   # columns to search over
     use_log        = data.get('use_log_target', True)
     remove_out     = data.get('remove_outliers', True)
-    min_features   = max(1, int(data.get('min_features', 1)))
+    min_features      = max(1, int(data.get('min_features', 1)))
+    required_features = [f for f in data.get('required_features', []) if f in candidate_cols]
     max_features   = int(data.get('max_features', 4))
     if max_features >= 20: max_features = len(candidate_cols)  # 20 = all features
     max_features   = max(min_features, min(max_features, len(candidate_cols)))
@@ -1630,7 +1631,8 @@ def tune_model():
     # Distributed search support: worker_id (0-based) and n_workers
     worker_id  = int(data.get('worker_id', 0))
     n_workers  = int(data.get('n_workers', 1))
-    n_jobs     = int(data.get('n_jobs', -1))   # -1 = all CPU cores
+    n_jobs          = int(data.get('n_jobs', -1))      # -1 = all CPU cores
+    parallel_combos = max(1, int(data.get('parallel_combos', 1)))  # simultaneous combos
     if n_workers < 1: n_workers = 1
     if worker_id >= n_workers: worker_id = 0
 
@@ -1757,9 +1759,13 @@ def tune_model():
 
     # Generate all feature subsets up to max_features size
     from itertools import combinations as _combs
+    req_set = set(required_features)
     all_combos = []
     for size in range(min_features, max_features + 1):
         for combo in _combs(candidate_cols, size):
+            # Skip combos that don't include ALL required features
+            if req_set and not req_set.issubset(set(combo)):
+                continue
             all_combos.append(list(combo))
 
     # No combo cap — user can stop anytime via Stop button
@@ -1786,20 +1792,42 @@ def tune_model():
             {k:v for k,v in r.items() if k!='r2_raw'} for r in results[:top_n]]
 
     def run_tune():
+        from sklearn.utils.parallel import Parallel as _Parallel, delayed as _delayed
+        import threading as _th
         all_results = []
-        done = 0
+        lock        = _th.Lock()
 
-        # Phase 1: ultra-fast screening (RF n=30) on ALL combos
-        _tune_jobs[job_id]['phase'] = 'Phase 1/3: fast screening (RF n=30)'
-        for feat_list in all_combos:
+        ncpu = _os.cpu_count() or 4
+        # Each parallel combo gets ncpu//parallel_combos cores; n_jobs=1 if equal split
+        jobs_per_combo = max(1, ncpu // parallel_combos) if parallel_combos > 1 else (n_jobs if n_jobs != 0 else -1)
+        RF_FAST_PAR = {**RF_FAST, 'n_jobs': jobs_per_combo}
+
+        def eval_combo(feat_list):
+            """Evaluate one combo — called in parallel via joblib."""
+            if _tune_jobs[job_id].get('status') == 'stopped':
+                return feat_list, (None, None)
+            return feat_list, quick_cv(feat_list, RF_FAST_PAR)
+
+        # Phase 1: joblib parallel — process all combos in batches
+        # Batches allow live progress updates while keeping full parallelism
+        _tune_jobs[job_id]['phase'] = f'Phase 1/3: fast screening ({parallel_combos} parallel, {jobs_per_combo} CPU/combo)'
+        batch_size = max(parallel_combos, min(50, max(parallel_combos * 5, len(all_combos) // 10)))
+        batches    = [all_combos[i:i+batch_size] for i in range(0, len(all_combos), batch_size)]
+        done = 0
+        for batch in batches:
             if _tune_jobs[job_id].get('status') == 'stopped': break
-            r2, mae = quick_cv(feat_list, RF_FAST)
-            done += 1; _tune_jobs[job_id]['progress'] = done
-            if r2 is None: continue
-            all_results.append({'features': feat_list, 'n_features': len(feat_list),
-                                 'model': RF_FULL['label'], 'r2': round(r2*100,1),
-                                 'mae': round(mae,0), 'r2_raw': r2})
-            store(all_results)
+            batch_res = _Parallel(n_jobs=parallel_combos, prefer='threads')(
+                _delayed(eval_combo)(fl) for fl in batch
+            )
+            for feat_list, (r2, mae) in batch_res:
+                done += 1
+                _tune_jobs[job_id]['progress'] = done
+                if r2 is None: continue
+                with lock:
+                    all_results.append({'features': feat_list, 'n_features': len(feat_list),
+                                        'model': RF_FULL['label'], 'r2': round(r2*100,1),
+                                        'mae': round(mae,0), 'r2_raw': r2})
+            store(all_results)  # update live results after each batch
 
         # Phase 2: top 40% with full RF (n=200)
         if _tune_jobs[job_id].get('status') != 'stopped':
@@ -1862,7 +1890,19 @@ def tune_estimate():
     n_cols = len(candidate_cols)
     if max_features >= 20: max_features = n_cols
     max_features = max(min_features, min(max_features, n_cols))
-    n_combos = sum(len(list(_combs(range(n_cols), k))) for k in range(min_features, max_features+1))
+    required_feat = data.get('required_features', [])
+    req_set_e = set(required_feat)
+    if req_set_e:
+        # Count only combos that include all required features
+        n_req = len(req_set_e)
+        free_cols = n_cols - n_req
+        n_combos = sum(
+            len(list(_combs(range(free_cols), k - n_req)))
+            for k in range(max(min_features, n_req), max_features + 1)
+            if k >= n_req and (k - n_req) <= free_cols
+        )
+    else:
+        n_combos = sum(len(list(_combs(range(n_cols), k))) for k in range(min_features, max_features+1))
     phase2 = max(1, int(n_combos * 0.3))
     total_tests = n_combos + phase2 * 2
     secs_per_test = max(0.3, 1.2 * n_rows / 100)
