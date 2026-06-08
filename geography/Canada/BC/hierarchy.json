@@ -1,0 +1,212 @@
+{
+  "country": "Canada",
+  "province": "British Columbia",
+  "cities": {
+    "Abbotsford": {
+      "districts": [
+        "Abbotsford West"
+      ],
+      "district_count": 1
+    },
+    "Burnaby": {
+      "districts": [
+        "Brentwood Park",
+        "Central BN",
+        "Central Park BS",
+        "Edmonds BE",
+        "Metrotown",
+        "Oaklands",
+        "Parkcrest",
+        "Simon Fraser Univer."
+      ],
+      "district_count": 8
+    },
+    "Campbell River": {
+      "districts": [],
+      "district_count": 0
+    },
+    "Chilcotin": {
+      "districts": [],
+      "district_count": 0
+    },
+    "Chilliwack": {
+      "districts": [
+        "Chilliwack Downtown",
+        "Chilliwack Proper East",
+        "Chilliwack Proper South",
+        "Eastern Hillsides",
+        "Garrison Crossing",
+        "Promontory",
+        "Vedder Crossing"
+      ],
+      "district_count": 7
+    },
+    "Coquitlam": {
+      "districts": [
+        "Coquitlam West",
+        "Maillardville",
+        "New Horizons",
+        "North Coquitlam",
+        "Westwood Plateau"
+      ],
+      "district_count": 5
+    },
+    "Cowichan Bay": {
+      "districts": [],
+      "district_count": 0
+    },
+    "Delta": {
+      "districts": [
+        "Annieville",
+        "Hawthorne",
+        "Scottsdale"
+      ],
+      "district_count": 3
+    },
+    "Garden Bay": {
+      "districts": [
+        "Pender Harbour Egmont"
+      ],
+      "district_count": 1
+    },
+    "Gibsons": {
+      "districts": [
+        "Gibsons & Area"
+      ],
+      "district_count": 1
+    },
+    "Lac La Hache": {
+      "districts": [
+        "Lac la Hache"
+      ],
+      "district_count": 1
+    },
+    "Ladysmith": {
+      "districts": [],
+      "district_count": 0
+    },
+    "Likely": {
+      "districts": [],
+      "district_count": 0
+    },
+    "Maple Ridge": {
+      "districts": [
+        "Cottonwood MR",
+        "East Central"
+      ],
+      "district_count": 2
+    },
+    "Masset": {
+      "districts": [],
+      "district_count": 0
+    },
+    "Mission": {
+      "districts": [
+        "Mission BC",
+        "Stave Falls"
+      ],
+      "district_count": 2
+    },
+    "Nanaimo": {
+      "districts": [],
+      "district_count": 0
+    },
+    "North Vancouver": {
+      "districts": [
+        "Boulevard",
+        "Central Lonsdale",
+        "Lynnmour",
+        "Pemberton NV"
+      ],
+      "district_count": 4
+    },
+    "Port Moody": {
+      "districts": [
+        "North Shore Pt Moody"
+      ],
+      "district_count": 1
+    },
+    "Prince George": {
+      "districts": [
+        "Aberdeen",
+        "Buckhorn"
+      ],
+      "district_count": 2
+    },
+    "Qualicum Beach": {
+      "districts": [],
+      "district_count": 0
+    },
+    "Richmond": {
+      "districts": [
+        "Brighouse South",
+        "East Cambie",
+        "Hamilton RI",
+        "Seafair",
+        "West Cambie"
+      ],
+      "district_count": 5
+    },
+    "Smithers": {
+      "districts": [
+        "Smithers - Rural"
+      ],
+      "district_count": 1
+    },
+    "Surrey": {
+      "districts": [
+        "Clayton",
+        "East Newton",
+        "Fleetwood Tynehead",
+        "Grandview Surrey",
+        "Guildford",
+        "King George Corridor",
+        "Morgan Creek",
+        "Royal Heights",
+        "Sullivan Station",
+        "West Newton",
+        "Whalley"
+      ],
+      "district_count": 11
+    },
+    "Vancouver": {
+      "districts": [
+        "Cambie",
+        "Coal Harbour",
+        "Collingwood VE",
+        "Downtown VW",
+        "Dunbar",
+        "False Creek",
+        "Grandview Woodland",
+        "Hastings Sunrise",
+        "Kitsilano",
+        "South Granville",
+        "South Marine"
+      ],
+      "district_count": 11
+    },
+    "West Vancouver": {
+      "districts": [
+        "Ambleside"
+      ],
+      "district_count": 1
+    },
+    "Whistler": {
+      "districts": [
+        "Whistler Creek",
+        "Whistler Village"
+      ],
+      "district_count": 2
+    },
+    "White Rock": {
+      "districts": [],
+      "district_count": 0
+    },
+    "Williams Lake": {
+      "districts": [
+        "Williams Lake - Rural North"
+      ],
+      "district_count": 1
+    }
+  }
+}

@@ -1,0 +1,286 @@
+{
+  "province": "British Columbia",
+  "country": "Canada",
+  "districts": [
+    {
+      "district": "Abbotsford West",
+      "city": "Abbotsford"
+    },
+    {
+      "district": "Brentwood Park",
+      "city": "Burnaby"
+    },
+    {
+      "district": "Central BN",
+      "city": "Burnaby"
+    },
+    {
+      "district": "Central Park BS",
+      "city": "Burnaby"
+    },
+    {
+      "district": "Edmonds BE",
+      "city": "Burnaby"
+    },
+    {
+      "district": "Metrotown",
+      "city": "Burnaby"
+    },
+    {
+      "district": "Oaklands",
+      "city": "Burnaby"
+    },
+    {
+      "district": "Parkcrest",
+      "city": "Burnaby"
+    },
+    {
+      "district": "Simon Fraser Univer.",
+      "city": "Burnaby"
+    },
+    {
+      "district": "Chilliwack Downtown",
+      "city": "Chilliwack"
+    },
+    {
+      "district": "Chilliwack Proper East",
+      "city": "Chilliwack"
+    },
+    {
+      "district": "Chilliwack Proper South",
+      "city": "Chilliwack"
+    },
+    {
+      "district": "Eastern Hillsides",
+      "city": "Chilliwack"
+    },
+    {
+      "district": "Garrison Crossing",
+      "city": "Chilliwack"
+    },
+    {
+      "district": "Promontory",
+      "city": "Chilliwack"
+    },
+    {
+      "district": "Vedder Crossing",
+      "city": "Chilliwack"
+    },
+    {
+      "district": "Coquitlam West",
+      "city": "Coquitlam"
+    },
+    {
+      "district": "Maillardville",
+      "city": "Coquitlam"
+    },
+    {
+      "district": "New Horizons",
+      "city": "Coquitlam"
+    },
+    {
+      "district": "North Coquitlam",
+      "city": "Coquitlam"
+    },
+    {
+      "district": "Westwood Plateau",
+      "city": "Coquitlam"
+    },
+    {
+      "district": "Annieville",
+      "city": "Delta"
+    },
+    {
+      "district": "Hawthorne",
+      "city": "Delta"
+    },
+    {
+      "district": "Scottsdale",
+      "city": "Delta"
+    },
+    {
+      "district": "Pender Harbour Egmont",
+      "city": "Garden Bay"
+    },
+    {
+      "district": "Gibsons & Area",
+      "city": "Gibsons"
+    },
+    {
+      "district": "Lac la Hache",
+      "city": "Lac La Hache"
+    },
+    {
+      "district": "Cottonwood MR",
+      "city": "Maple Ridge"
+    },
+    {
+      "district": "East Central",
+      "city": "Maple Ridge"
+    },
+    {
+      "district": "Mission BC",
+      "city": "Mission"
+    },
+    {
+      "district": "Stave Falls",
+      "city": "Mission"
+    },
+    {
+      "district": "Boulevard",
+      "city": "North Vancouver"
+    },
+    {
+      "district": "Central Lonsdale",
+      "city": "North Vancouver"
+    },
+    {
+      "district": "Lynnmour",
+      "city": "North Vancouver"
+    },
+    {
+      "district": "Pemberton NV",
+      "city": "North Vancouver"
+    },
+    {
+      "district": "North Shore Pt Moody",
+      "city": "Port Moody"
+    },
+    {
+      "district": "Aberdeen",
+      "city": "Prince George"
+    },
+    {
+      "district": "Buckhorn",
+      "city": "Prince George"
+    },
+    {
+      "district": "Brighouse South",
+      "city": "Richmond"
+    },
+    {
+      "district": "East Cambie",
+      "city": "Richmond"
+    },
+    {
+      "district": "Hamilton RI",
+      "city": "Richmond"
+    },
+    {
+      "district": "Seafair",
+      "city": "Richmond"
+    },
+    {
+      "district": "West Cambie",
+      "city": "Richmond"
+    },
+    {
+      "district": "Smithers - Rural",
+      "city": "Smithers"
+    },
+    {
+      "district": "Clayton",
+      "city": "Surrey"
+    },
+    {
+      "district": "East Newton",
+      "city": "Surrey"
+    },
+    {
+      "district": "Fleetwood Tynehead",
+      "city": "Surrey"
+    },
+    {
+      "district": "Grandview Surrey",
+      "city": "Surrey"
+    },
+    {
+      "district": "Guildford",
+      "city": "Surrey"
+    },
+    {
+      "district": "King George Corridor",
+      "city": "Surrey"
+    },
+    {
+      "district": "Morgan Creek",
+      "city": "Surrey"
+    },
+    {
+      "district": "Royal Heights",
+      "city": "Surrey"
+    },
+    {
+      "district": "Sullivan Station",
+      "city": "Surrey"
+    },
+    {
+      "district": "West Newton",
+      "city": "Surrey"
+    },
+    {
+      "district": "Whalley",
+      "city": "Surrey"
+    },
+    {
+      "district": "Cambie",
+      "city": "Vancouver"
+    },
+    {
+      "district": "Coal Harbour",
+      "city": "Vancouver"
+    },
+    {
+      "district": "Collingwood VE",
+      "city": "Vancouver"
+    },
+    {
+      "district": "Downtown VW",
+      "city": "Vancouver"
+    },
+    {
+      "district": "Dunbar",
+      "city": "Vancouver"
+    },
+    {
+      "district": "False Creek",
+      "city": "Vancouver"
+    },
+    {
+      "district": "Grandview Woodland",
+      "city": "Vancouver"
+    },
+    {
+      "district": "Hastings Sunrise",
+      "city": "Vancouver"
+    },
+    {
+      "district": "Kitsilano",
+      "city": "Vancouver"
+    },
+    {
+      "district": "South Granville",
+      "city": "Vancouver"
+    },
+    {
+      "district": "South Marine",
+      "city": "Vancouver"
+    },
+    {
+      "district": "Ambleside",
+      "city": "West Vancouver"
+    },
+    {
+      "district": "Whistler Creek",
+      "city": "Whistler"
+    },
+    {
+      "district": "Whistler Village",
+      "city": "Whistler"
+    },
+    {
+      "district": "Williams Lake - Rural North",
+      "city": "Williams Lake"
+    }
+  ]
+}

@@ -1,0 +1,3508 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RealytIQ — Property Analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0c0e;
+    --surface: #131519;
+    --surface2: #1a1d23;
+    --border: #252830;
+    --border2: #2f3340;
+    --accent: #c8f04a;
+    --accent2: #8de8c4;
+    --accent3: #f0a84a;
+    --text: #e8eaf0;
+    --text2: #8a8f9e;
+    --text3: #5a5f6e;
+    --danger: #ff5f5f;
+    --success: #4af09e;
+    --mono: 'DM Mono', monospace;
+    --serif: 'DM Serif Display', serif;
+    --sans: 'Inter', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* HEADER */
+  header {
+    padding: 24px 40px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: rgba(11,12,14,0.95);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: var(--serif);
+    font-size: 22px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; }
+
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    background: var(--surface);
+    padding: 4px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .tab-btn {
+    padding: 8px 20px;
+    border: none;
+    background: transparent;
+    color: var(--text2);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.01em;
+  }
+  .tab-btn:hover { color: var(--text); background: var(--surface2); }
+  .tab-btn.active { background: var(--accent); color: #000; font-weight: 600; }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text3);
+    font-family: var(--mono);
+  }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); }
+  .status-dot.active { background: var(--success); box-shadow: 0 0 6px var(--success); }
+
+  /* MAIN LAYOUT */
+  main { display: flex; min-height: calc(100vh - 73px); }
+
+  .sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    padding: 32px 24px;
+    overflow-y: auto;
+    background: var(--surface);
+  }
+
+  .content {
+    flex: 1;
+    padding: 32px 40px;
+    overflow-y: auto;
+  }
+
+  /* UPLOAD ZONE */
+  .upload-zone {
+    border: 2px dashed var(--border2);
+    border-radius: 12px;
+    padding: 32px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: var(--bg);
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(200,240,74,0.04); }
+  .upload-zone.has-file { border-color: var(--success); border-style: solid; }
+
+  .upload-icon {
+    width: 48px; height: 48px;
+    background: var(--surface2);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 16px;
+    font-size: 20px;
+    border: 1px solid var(--border2);
+  }
+
+  .upload-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .upload-sub { font-size: 12px; color: var(--text3); }
+
+  /* SECTION LABELS */
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 12px;
+    margin-top: 28px;
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  /* SELECTS & INPUTS */
+  select, input[type=range], input[type=number], input[type=text] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: var(--sans);
+    outline: none;
+    transition: border-color 0.2s;
+    appearance: none;
+  }
+  select:focus, input:focus { border-color: var(--accent); }
+  select option { background: var(--surface2); }
+
+  .checkbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 180px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .checkbox-list::-webkit-scrollbar { width: 4px; }
+  .checkbox-list::-webkit-scrollbar-track { background: transparent; }
+  .checkbox-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .check-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 13px;
+    justify-content: space-between;
+  }
+  .check-item > span:first-of-type { display:flex; align-items:center; gap:4px; flex:1; min-width:0; }
+  .check-item:hover { background: var(--surface2); }
+  .check-item input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent); }
+
+  /* BUTTONS */
+  .btn-primary {
+    width: 100%;
+    padding: 11px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 9px;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.01em;
+    margin-top: 20px;
+  }
+  .btn-primary:hover { background: #d8ff5a; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-secondary {
+    padding: 8px 16px;
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* RANGE */
+  .range-row { display: flex; align-items: center; gap: 10px; }
+  .range-row input[type=range] { padding: 0; flex: 1; accent-color: var(--accent); }
+  .range-val { font-family: var(--mono); font-size: 12px; color: var(--accent); min-width: 36px; text-align: right; }
+
+  /* STATS CARDS */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+  }
+  .stat-val {
+    font-family: var(--serif);
+    font-size: 28px;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .stat-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  /* CORRELATION RESULTS */
+  .corr-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .corr-table th {
+    text-align: left;
+    padding: 10px 14px;
+    background: var(--surface);
+    color: var(--text3);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+  .corr-table td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .corr-table tr:last-child td { border-bottom: none; }
+  .corr-table tr:hover td { background: rgba(200,240,74,0.03); }
+
+  .corr-bar {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    margin-top: 4px;
+    overflow: hidden;
+  }
+  .corr-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.6s ease;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--mono);
+  }
+  .badge-pos { background: rgba(74,240,158,0.15); color: var(--success); }
+  .badge-neg { background: rgba(255,95,95,0.15); color: var(--danger); }
+
+  /* HEATMAP */
+  #heatmap-container {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 500px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 32px;
+  }
+  #heatmap-canvas { display: block; cursor: crosshair; }
+
+  .heatmap-tooltip {
+    position: fixed;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-family: var(--mono);
+    pointer-events: none;
+    z-index: 1000;
+    display: none;
+  }
+
+  /* SCATTER */
+  #scatter-canvas { display: block; border-radius: 8px; }
+
+  .scatter-wrapper {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  /* MODEL RESULTS */
+  .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .metric-val {
+    font-family: var(--serif);
+    font-size: 36px;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .metric-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .importance-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .importance-name { font-size: 12px; min-width: 120px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .importance-track { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .importance-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent2), var(--accent)); transition: width 0.8s ease; }
+  .importance-pct { font-family: var(--mono); font-size: 11px; color: var(--text3); min-width: 38px; text-align: right; }
+
+  /* PREDICT FORM */
+  .predict-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .predict-field label { display: block; font-size: 11px; color: var(--text2); margin-bottom: 6px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .prediction-result {
+    background: linear-gradient(135deg, var(--surface), var(--surface2));
+    border: 1px solid var(--accent);
+    border-radius: 16px;
+    padding: 32px;
+    text-align: center;
+    margin-top: 24px;
+    display: none;
+  }
+  .prediction-result.show { display: block; animation: popIn 0.4s ease; }
+  @keyframes popIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .prediction-label { font-size: 12px; color: var(--text3); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
+  .prediction-value {
+    font-family: var(--serif);
+    font-size: 52px;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .prediction-unit { font-size: 14px; color: var(--text2); }
+
+  /* EMPTY STATE */
+  .empty-state {
+    text-align: center;
+    padding: 80px 40px;
+    color: var(--text3);
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+  .empty-title { font-size: 16px; font-family: var(--serif); color: var(--text2); margin-bottom: 8px; }
+  .empty-sub { font-size: 13px; line-height: 1.6; }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 12px 18px;
+    font-size: 13px;
+    z-index: 9999;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s;
+    max-width: 320px;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+  .toast.success { border-color: var(--success); color: var(--success); }
+
+  /* SECTION HEADER */
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .section-title { font-family: var(--serif); font-size: 26px; }
+  .section-count {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    background: rgba(200,240,74,0.1);
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+
+  /* DIVIDER */
+  .divider { height: 1px; background: var(--border); margin: 28px 0; }
+
+  /* PANEL */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 18px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-title span { color: var(--text3); font-weight: 400; }
+
+  /* TABS IN CONTENT */
+  .view-toggle { display: flex; gap: 6px; margin-bottom: 24px; }
+  .view-btn {
+    padding: 7px 14px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text2);
+    border-radius: 7px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: var(--sans);
+  }
+  .view-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(200,240,74,0.07); }
+
+  /* SCATTER SELECT */
+  .scatter-selects { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  .scatter-selects select { flex: 1; min-width: 130px; }
+  .vs-label { color: var(--text3); font-family: var(--mono); font-size: 12px; }
+
+  /* LOADING */
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid var(--border2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* SCROLLBARS */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+    main { flex-direction: column; }
+    .result-grid, .predict-grid { grid-template-columns: 1fr; }
+    header { padding: 16px 20px; }
+    .content { padding: 20px; }
+    .tab-btn { padding: 7px 12px; font-size: 12px; }
+  }
+
+  .page { display: none; }
+  .page.active { display: flex; width: 100%; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    RealytIQ
+  </div>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchPage('correlation')">Correlations</button>
+    <button class="tab-btn" onclick="switchPage('prediction')">Prediction</button>
+    <button class="tab-btn" onclick="switchPage('impact')">Category Impact</button>
+    <button class="tab-btn" onclick="switchPage('segment')">Segment Models</button>
+    <button class="tab-btn" onclick="switchPage('undervalued')">Undervalued 🔍</button>
+    <button class="tab-btn" onclick="switchPage('tuning')">Tuning ⚙️</button>
+  </div>
+  <div class="status-bar">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">No data loaded</span>
+  </div>
+</header>
+
+<!-- ====== GLOBAL FILTER BAR ====== -->
+<div id="city-filter-bar" style="display:none">
+  <div style="display:flex;align-items:center;gap:12px;padding:8px 32px;background:var(--surface);border-bottom:1px solid var(--border)">
+    <button id="filter-toggle-btn" onclick="toggleFilterPanel()"
+            style="display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);cursor:pointer;font-size:12px;font-family:var(--sans)">
+      <span>⚙ Filters</span>
+      <span id="filter-active-count" style="display:none;background:var(--accent);color:#000;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:700;line-height:16px"></span>
+    </button>
+    <span id="city-filter-count" style="font-size:12px;color:var(--text2);font-family:var(--mono)"></span>
+    <button id="filter-reset-btn" onclick="resetAllFilters()" style="display:none;padding:5px 12px;background:transparent;border:1px solid var(--border2);border-radius:7px;color:var(--danger);cursor:pointer;font-size:11px;font-family:var(--sans)">✕ Reset</button>
+  </div>
+
+  <!-- Dropdown panel — fixed, opens below button -->
+  <div id="filter-panel" style="display:none;position:fixed;z-index:2000;
+       background:var(--surface2);border:1px solid var(--border2);border-radius:12px;
+       padding:20px;min-width:280px;max-width:310px;box-shadow:0 12px 40px rgba(0,0,0,.5);
+       max-height:80vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:11px;color:var(--text2);font-family:var(--mono);text-transform:uppercase;letter-spacing:.1em">Filters</span>
+      <span id="filter-row-count" style="font-size:11px;color:var(--accent);font-family:var(--mono)"></span>
+    </div>
+    <div id="global-filter-selects" style="display:flex;flex-direction:column;gap:16px"></div>
+    <div style="margin-top:20px;display:flex;gap:8px;border-top:1px solid var(--border);padding-top:16px">
+      <button onclick="applyGlobalFilters()" style="flex:1;padding:9px;background:var(--accent);color:#000;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer">Apply</button>
+      <button onclick="resetAllFilters()" style="padding:9px 16px;background:var(--surface);border:1px solid var(--border2);border-radius:8px;color:var(--text);cursor:pointer;font-size:12px">Reset</button>
+    </div>
+  </div>
+</div>
+
+<main>
+
+<!-- ====== CORRELATION PAGE ====== -->
+<div class="page active" id="page-correlation">
+
+  <div class="sidebar">
+    <div class="section-label">Upload Data</div>
+    <label for="csv-input" id="upload-label" style="display:block;cursor:pointer">
+      <input type="file" id="csv-input" accept=".csv" style="display:none">
+      <div class="upload-zone" id="upload-zone">
+        <div class="upload-icon">📂</div>
+        <div class="upload-title">Drag & drop CSV file</div>
+        <div class="upload-sub">or click to browse</div>
+      </div>
+    </label>
+
+    <div id="corr-controls" style="display:none">
+      <div class="section-label">Focus Column</div>
+      <select id="corr-focus-col"></select>
+
+      <div class="section-label">Minimum Correlation</div>
+      <div class="range-row">
+        <input type="range" id="threshold" min="0.1" max="0.95" step="0.05" value="0.3" oninput="document.getElementById('threshold-val').textContent=this.value">
+        <span class="range-val" id="threshold-val">0.3</span>
+      </div>
+
+      <div class="section-label">Numeric Columns</div>
+      <div class="checkbox-list" id="corr-col-list"></div>
+
+      <button class="btn-primary" onclick="runCorrelation()">
+        Analyse Correlations
+      </button>
+
+      <div class="section-label" style="margin-top:24px">Scatter Plot</div>
+      <div class="scatter-selects" style="flex-direction:column; gap:8px;">
+        <select id="scatter-x"></select>
+        <select id="scatter-y"></select>
+        <button class="btn-secondary" style="width:100%" onclick="loadScatter()">Plot</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="corr-empty" class="empty-state">
+      <div class="empty-icon">📊</div>
+      <div class="empty-title">Upload a CSV file</div>
+      <div class="empty-sub">After uploading, correlation analysis will be available for all numeric features</div>
+    </div>
+
+    <div id="corr-results" style="display:none">
+      <div class="section-header">
+        <div class="section-title" id="corr-section-title">Correlation Matrix</div>
+        <div class="section-count" id="corr-count">0 pairs</div>
+      </div>
+
+      <div class="stats-grid" id="corr-stats-grid"></div>
+
+      <div class="view-toggle">
+        <button class="view-btn active" onclick="switchView('heatmap', this)">Heatmap</button>
+        <button class="view-btn" onclick="switchView('table', this)">Table</button>
+        <button class="view-btn" onclick="switchView('scatter', this)">Scatter</button>
+      </div>
+
+      <div id="view-heatmap">
+        <div id="heatmap-container">
+          <canvas id="heatmap-canvas"></canvas>
+        </div>
+      </div>
+
+      <div id="view-table" style="display:none">
+        <div class="panel" style="padding:0; overflow:hidden;">
+          <table class="corr-table">
+            <thead>
+              <tr>
+                <th>Feature 1</th>
+                <th>Feature 2</th>
+                <th>Correlation</th>
+                <th>Strength</th>
+                <th>Direction</th>
+              </tr>
+            </thead>
+            <tbody id="corr-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="view-scatter" style="display:none">
+        <div class="scatter-wrapper">
+          <canvas id="scatter-canvas" width="640" height="380"></canvas>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ====== PREDICTION PAGE ====== -->
+<div class="page" id="page-prediction">
+
+  <div class="sidebar">
+    <div id="pred-upload-msg">
+      <div class="section-label">Data Status</div>
+      <div style="font-size:13px; color:var(--text3); line-height:1.6; padding:12px; background:var(--bg); border-radius:8px; border:1px solid var(--border);">
+        First upload a CSV file on the <b style="color:var(--text)">Correlations</b> tab
+      </div>
+    </div>
+
+    <div id="pred-controls" style="display:none">
+      <div class="section-label">Target Variable (price)</div>
+      <select id="target-col"></select>
+
+      <div class="section-label" style="display:flex;align-items:center;justify-content:space-between">
+        Feature Columns
+        <span style="display:flex;gap:4px">
+          <button onclick="saveFeaturePreset()" title="Save current selection"
+                  style="padding:2px 8px;font-size:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text2);cursor:pointer">💾 Save</button>
+          <button onclick="restoreFeaturePreset()" title="Restore saved selection"
+                  style="padding:2px 8px;font-size:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text2);cursor:pointer">↩ Restore</button>
+        </span>
+      </div>
+      <div class="checkbox-list" id="pred-feature-list"></div>
+
+      <div class="section-label">Algorithm</div>
+      <select id="model-type">
+        <option value="random_forest">Random Forest 🌲</option>
+        <option value="gradient_boosting">Gradient Boosting 🚀</option>
+        <option value="linear">Linear Regression 📈</option>
+      </select>
+
+      <label class="check-item" style="margin-top:8px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border2)">
+        <input type="checkbox" id="remove-outliers" checked>
+        Remove price outliers <span style="font-size:10px;color:var(--text3)">(3×IQR)</span>
+      </label>
+      <label class="check-item" style="margin-top:6px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border2)">
+        <input type="checkbox" id="use-log-target" checked>
+        Log-transform target <span style="font-size:10px;color:var(--text3)">(better R² on skewed prices)</span>
+      </label>
+
+      <div style="display:flex;gap:8px;margin-top:0">
+        <button class="btn-primary" id="train-btn" onclick="trainModel()" style="flex:1;margin:0">
+          Train Model
+        </button>
+        <button onclick="saveCurrentModel()" id="save-model-btn" disabled
+                title="Save trained model"
+                style="padding:10px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:16px;line-height:1">💾</button>
+      </div>
+      <button class="btn-secondary" id="analyse-btn" onclick="runFeatureAnalysis()" style="width:100%;margin-top:8px;display:none">
+        Analyse Feature Impact
+      </button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="pred-empty" class="empty-state">
+      <div class="empty-icon">🤖</div>
+      <div class="empty-title">Configure the Model</div>
+      <div class="empty-sub">Upload a CSV, select a target variable and features, then click Train Model</div>
+    </div>
+
+    <!-- Saved Models Panel -->
+    <div id="saved-models-panel" style="margin-bottom:20px">
+      <div class="section-header" style="cursor:pointer" onclick="toggleSavedModels()">
+        <div class="section-title">Saved Models</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="section-count" id="saved-models-count">0</div>
+          <span id="saved-models-toggle" style="font-size:11px;color:var(--text3)">&#9654;</span>
+        </div>
+      </div>
+      <div id="saved-models-list" style="display:none;margin-top:8px"></div>
+    </div>
+
+    <div id="pred-results" style="display:none">
+      <div class="section-header">
+        <div class="section-title">Model Results</div>
+        <div class="section-count" id="model-type-badge">–</div>
+      </div>
+      <div id="model-config-summary" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:16px;display:none">
+        <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Trained on</div>
+        <div id="model-filter-info" style="font-size:11px;color:var(--accent2);margin-bottom:6px"></div>
+        <div id="model-features-info" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">
+        <div class="metric-card" style="grid-column:1/3">
+          <div style="display:flex;gap:24px;align-items:flex-start">
+            <div>
+              <div class="metric-val" id="r2-cv-val" style="color:var(--success)">–</div>
+              <div class="metric-label">R² — 5-fold CV</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">Reliable · same as Tuning</div>
+            </div>
+            <div>
+              <div class="metric-val" id="mae-cv-val" style="color:var(--accent)">–</div>
+              <div class="metric-label">MAE — 5-fold CV</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">Average prediction error</div>
+            </div>
+            <div style="border-left:1px solid var(--border);padding-left:24px">
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Single split (20% test)</div>
+              <div style="font-size:13px;font-family:var(--mono)">R² <span id="r2-val" style="color:var(--text2)">–</span> &nbsp; MAE <span id="mae-val" style="color:var(--text2)">–</span></div>
+              <div id="r2-note" style="font-size:10px;color:var(--text3);margin-top:2px;line-height:1.4"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Feature Importance <span>(impact on price)</span></div>
+        <div id="importance-bars"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Actual vs Predicted</div>
+        <canvas id="pred-chart" height="200"></canvas>
+      </div>
+
+      <div class="divider"></div>
+
+      <div id="feature-analysis-panel" style="display:none">
+        <div class="section-header">
+          <div class="section-title">Feature Impact Analysis</div>
+          <div class="section-count" id="fa-badge">–</div>
+        </div>
+        <div class="panel" style="padding:0;overflow:hidden;margin-bottom:24px">
+          <table class="corr-table">
+            <thead><tr>
+              <th>Feature</th>
+              <th>Corr with target</th>
+              <th>R² impact</th>
+              <th>MAE impact</th>
+              <th>Recommendation</th>
+            </tr></thead>
+            <tbody id="fa-tbody"></tbody>
+          </table>
+        </div>
+        <div class="divider"></div>
+      </div>
+
+      <div class="section-header">
+        <div class="section-title">Predict Price</div>
+      </div>
+
+      <div class="panel">
+        <div class="predict-grid" id="predict-inputs"></div>
+        <button class="btn-primary" onclick="runPrediction()" style="max-width:200px; margin-top:16px;">
+          Calculate Price
+        </button>
+
+        <div class="prediction-result" id="prediction-result">
+          <div class="prediction-label" id="pred-target-label">Predicted Price</div>
+          <div class="prediction-value" id="pred-value">–</div>
+          <div class="prediction-unit" id="pred-unit"></div>
+        </div>
+      </div>
+
+      <!-- Similar listings -->
+      <div id="similar-panel" style="display:none">
+        <div class="section-header" style="margin-top:8px">
+          <div class="section-title" style="font-size:20px">Similar Listings</div>
+          <div class="section-count" id="similar-count-badge">–</div>
+        </div>
+        <div class="panel" style="padding:0;overflow:hidden">
+          <table class="corr-table" id="similar-table">
+            <thead><tr>
+              <th>Address</th>
+              <th>Type</th>
+              <th>City / District</th>
+              <th>Beds / Baths / Sqft</th>
+              <th>Price</th>
+              <th>Similarity</th>
+            </tr></thead>
+            <tbody id="similar-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== CATEGORY IMPACT PAGE ====== -->
+<div class="page" id="page-impact">
+
+  <div class="sidebar">
+    <div id="impact-upload-msg">
+      <div class="section-label">Data Status</div>
+      <div style="font-size:13px; color:var(--text3); line-height:1.6; padding:12px; background:var(--bg); border-radius:8px; border:1px solid var(--border);">
+        First upload a CSV file on the <b style="color:var(--text)">Correlations</b> tab
+      </div>
+    </div>
+    <div id="impact-controls" style="display:none">
+      <div class="section-label">Target Variable</div>
+      <select id="impact-target-col"></select>
+
+      <div class="section-label">Show Columns</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="impactCheckAll(true)">All</button>
+        <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="impactCheckAll(false)">None</button>
+      </div>
+      <div class="checkbox-list" id="impact-col-list"></div>
+
+      <div class="section-label">Split values by delimiter</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="impact-delimiter" value="," placeholder="e.g. , or /"
+               style="width:70px;text-align:center;font-family:var(--mono)">
+        <span style="font-size:11px;color:var(--text3);flex:1">
+          Splits "Elevator, Storage" into two separate values
+        </span>
+      </div>
+
+      <button class="btn-primary" onclick="runImpact()">Analyse Impact</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="impact-empty" class="empty-state">
+      <div class="empty-icon">🏷️</div>
+      <div class="empty-title">Category Impact Analysis</div>
+      <div class="empty-sub">See how each category value (neighbourhood, property type, etc.) affects the target price — including % difference from the overall average.</div>
+    </div>
+    <div id="impact-results" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ====== SEGMENT MODELS PAGE ====== -->
+<div class="page" id="page-segment">
+
+  <div class="sidebar">
+    <div id="seg-upload-msg">
+      <div class="section-label">Data Status</div>
+      <div style="font-size:13px;color:var(--text3);line-height:1.6;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+        First upload a CSV file on the <b style="color:var(--text)">Correlations</b> tab
+      </div>
+    </div>
+    <div id="seg-controls" style="display:none">
+      <div class="section-label">Split Data By</div>
+      <select id="seg-split-col"></select>
+
+      <div class="section-label">Target Variable</div>
+      <select id="seg-target-col"></select>
+
+      <div class="section-label">Feature Columns</div>
+      <div class="checkbox-list" id="seg-feature-list"></div>
+
+      <div class="section-label">Algorithm</div>
+      <select id="seg-model-type">
+        <option value="random_forest">Random Forest 🌲</option>
+        <option value="gradient_boosting">Gradient Boosting 🚀</option>
+        <option value="linear">Linear Regression 📈</option>
+      </select>
+
+      <label class="check-item" style="margin-top:12px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border2)">
+        <input type="checkbox" id="seg-remove-outliers" checked>
+        Remove price outliers <span style="font-size:10px;color:var(--text3)">(3×IQR)</span>
+      </label>
+
+      <button class="btn-primary" id="seg-train-btn" onclick="trainSegments()">
+        Train Segment Models
+      </button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="seg-empty" class="empty-state">
+      <div class="empty-icon">🗂️</div>
+      <div class="empty-title">Segment Models</div>
+      <div class="empty-sub">Train a separate model for each unique value of a categorical column (e.g. one model per city). Compare accuracy across segments and predict using the right model for each group.</div>
+    </div>
+
+    <div id="seg-results" style="display:none">
+      <div class="section-header">
+        <div class="section-title" id="seg-results-title">Segment Models</div>
+        <div class="section-count" id="seg-count-badge">0 segments</div>
+      </div>
+
+      <!-- Comparison table -->
+      <div class="panel" style="padding:0;overflow:hidden;margin-bottom:24px">
+        <table class="corr-table" id="seg-compare-table">
+          <thead><tr>
+            <th>Segment</th>
+            <th>Rows</th>
+            <th>Mean Price</th>
+            <th>R² Score</th>
+            <th>MAE</th>
+            <th>Accuracy</th>
+          </tr></thead>
+          <tbody id="seg-compare-body"></tbody>
+        </table>
+      </div>
+
+      <!-- R² bar chart -->
+      <div class="panel" style="margin-bottom:24px">
+        <div class="panel-title">R² Comparison <span>(higher = more accurate)</span></div>
+        <div id="seg-r2-bars"></div>
+      </div>
+
+      <!-- Predict with segment -->
+      <div class="panel">
+        <div class="panel-title">Predict Price by Segment</div>
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:6px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em">Select Segment</label>
+          <select id="seg-predict-select" onchange="onSegmentChange()"></select>
+        </div>
+        <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:12px" id="seg-model-info"></div>
+        <div class="predict-grid" id="seg-predict-inputs"></div>
+        <button class="btn-primary" onclick="runSegmentPrediction()" style="max-width:200px;margin-top:16px">
+          Calculate Price
+        </button>
+        <div class="prediction-result" id="seg-prediction-result">
+          <div class="prediction-label" id="seg-pred-label">Predicted Price</div>
+          <div class="prediction-value" id="seg-pred-value">–</div>
+          <div class="prediction-unit" id="seg-pred-unit"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ====== UNDERVALUED PAGE ====== -->
+<div class="page" id="page-undervalued">
+  <div class="sidebar">
+    <div id="uv-upload-msg">
+      <div class="section-label">Status</div>
+      <div style="font-size:13px;color:var(--text3);line-height:1.6;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+        Train a model on the <b style="color:var(--text)">Prediction</b> tab first
+      </div>
+    </div>
+    <div id="uv-controls" style="display:none">
+      <div class="section-label">City Filter</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="uvCityCheckAll(true)">All</button>
+        <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="uvCityCheckAll(false)">None</button>
+      </div>
+      <div class="checkbox-list" id="uv-city-list" style="max-height:160px"></div>
+
+      <div class="section-label">Property Types</div>
+      <div class="checkbox-list" id="uv-type-list" style="max-height:160px"></div>
+
+      <div class="section-label">Min. Undervaluation</div>
+      <div class="range-row">
+        <input type="range" id="uv-min-pct" min="0" max="50" step="1" value="5"
+               oninput="document.getElementById('uv-min-pct-val').textContent=this.value+'%'">
+        <span class="range-val" id="uv-min-pct-val">5%</span>
+      </div>
+
+      <div class="section-label">Min. Confidence</div>
+      <select id="uv-confidence">
+        <option value="low">All (including Low)</option>
+        <option value="medium" selected>Medium or High</option>
+        <option value="high">High only (10+ comparable)</option>
+      </select>
+
+      <div class="section-label">Min. Beds / Baths</div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1">
+          <label style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase">Beds</label>
+          <select id="uv-min-beds" style="margin-top:4px">
+            <option value="">Any</option>
+            <option value="1">1+</option>
+            <option value="2">2+</option>
+            <option value="3">3+</option>
+            <option value="4">4+</option>
+            <option value="5">5+</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase">Baths</label>
+          <select id="uv-min-baths" style="margin-top:4px">
+            <option value="">Any</option>
+            <option value="1">1+</option>
+            <option value="2">2+</option>
+            <option value="3">3+</option>
+            <option value="4">4+</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="section-label">Show Top</div>
+      <select id="uv-top-n">
+        <option value="10">10 listings</option>
+        <option value="20">20 listings</option>
+        <option value="50">50 listings</option>
+        <option value="100">100 listings</option>
+        <option value="9999" selected>All listings</option>
+      </select>
+
+      <div class="section-label" style="margin-top:20px">
+        Category Filters
+        <button onclick="const d=document.getElementById('uv-cat-filters');d.style.display=d.style.display==='none'?'block':'none';this.textContent=d.style.display==='none'?'show':'hide'"
+                style="float:right;background:none;border:none;color:var(--accent2);cursor:pointer;font-size:11px">hide</button>
+      </div>
+      <div id="uv-cat-filters" style="margin-top:4px"></div>
+
+      <button class="btn-primary" onclick="runUndervalued()">Find Undervalued</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="uv-empty" class="empty-state">
+      <div class="empty-icon">🔍</div>
+      <div class="empty-title">Undervalued Listings</div>
+      <div class="empty-sub">Train a model first, then find listings where the actual price is significantly below the predicted price — potential deals worth investigating.</div>
+    </div>
+    <div id="uv-results" style="display:none">
+      <div class="section-header">
+        <div class="section-title">Undervalued Listings</div>
+        <div class="section-count" id="uv-count-badge">0 found</div>
+      </div>
+      <div class="stats-grid" id="uv-stats-grid" style="margin-bottom:24px"></div>
+      <div class="panel" style="padding:0;overflow:hidden">
+        <table class="corr-table" id="uv-table">
+          <thead><tr id="uv-thead-row">
+            <th>Address / Link</th>
+            <th>Type</th>
+            <th class="uv-sortable" data-col="city" style="cursor:pointer" onclick="uvSort('city')">City / District ↕</th>
+            <th class="uv-sortable" data-col="bedrooms" style="cursor:pointer" onclick="uvSort('bedrooms')">Beds / Baths ↕</th>
+            <th class="uv-sortable" data-col="actual" style="cursor:pointer" onclick="uvSort('actual')">Actual Price ↕</th>
+            <th class="uv-sortable" data-col="predicted" style="cursor:pointer" onclick="uvSort('predicted')">Predicted Price ↕</th>
+            <th class="uv-sortable" data-col="gap" style="cursor:pointer" onclick="uvSort('gap')">Undervalued by $ ↕</th>
+            <th class="uv-sortable" data-col="gap_pct" style="cursor:pointer" onclick="uvSort('gap_pct')">Undervalued % ↕</th>
+            <th>Confidence</th>
+          </tr></thead>
+          <tbody id="uv-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== MODEL TUNING PAGE ====== -->
+<div class="page" id="page-tuning">
+  <div class="sidebar">
+    <div id="tune-upload-msg">
+      <div class="section-label">Status</div>
+      <div style="font-size:13px;color:var(--text3);line-height:1.6;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">Upload a CSV first</div>
+    </div>
+    <div id="tune-controls" style="display:none">
+      <div class="section-label">Target Variable</div>
+      <select id="tune-target"></select>
+      <div class="section-label">Candidate Features</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="tuneCheckAll(true)">All</button>
+        <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="tuneCheckAll(false)">None</button>
+      </div>
+      <div class="checkbox-list" id="tune-feature-list"></div>
+      <div class="section-label">Feature combination size</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">
+        Tests every possible subset of your selected features within this range. Estimate updates automatically.
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="flex:1">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Min features</div>
+          <input type="number" id="tune-min-features" value="1" min="1" max="20"
+                 onchange="updateTuneEstimate()"
+                 style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px">
+        </div>
+        <div style="color:var(--text3);font-size:18px;padding-top:14px">–</div>
+        <div style="flex:1">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Max features</div>
+          <input type="number" id="tune-max-features" value="4" min="1" max="20"
+                 onchange="updateTuneEstimate()"
+                 style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px">
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:6px">
+        Enter any number 1–20, or match total features for exhaustive search.
+      </div>
+      <div id="tune-estimate" style="font-size:11px;font-family:var(--mono);color:var(--accent2);margin-bottom:6px;padding:6px 8px;background:var(--bg);border-radius:6px;display:none"></div>
+      <div class="section-label">Show Top</div>
+      <input type="number" id="tune-top-n" value="100" min="5" max="1000"
+             style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px">
+      <label class="check-item" style="margin:8px 0;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border2)">
+        <input type="checkbox" id="tune-log" checked> Log-transform target
+      </label>
+      <label class="check-item" style="padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border2)">
+        <input type="checkbox" id="tune-outliers" checked> Remove outliers
+      </label>
+      <div style="display:flex;gap:6px;margin-top:12px">
+        <button onclick="saveTunePreset()" title="Save current feature selection"
+                style="flex:1;padding:7px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text2);cursor:pointer;font-size:11px">💾 Save</button>
+        <button onclick="restoreTunePreset()" title="Restore saved selection"
+                style="flex:1;padding:7px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text2);cursor:pointer;font-size:11px">↩ Restore</button>
+      </div>
+      <div class="section-label" style="margin-top:12px">Distributed Search (optional)</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Total machines</div>
+          <input type="number" id="tune-n-workers" value="1" min="1" max="20"
+                 onchange="updateWorkerOptions()"
+                 style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px">
+        </div>
+        <div style="flex:1">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">This machine #</div>
+          <input type="number" id="tune-worker-id" value="1" min="1" max="20"
+                 style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px">
+        </div>
+        <div style="flex:1">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">CPU threads</div>
+          <input type="number" id="tune-n-jobs" value="-1" min="-1" max="32"
+                 style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px"
+                 title="-1 = all cores, 1 = single, 4 = 4 cores">
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.5">
+        CPU threads: <b>-1</b> = all cores (fastest), or set exact number. Distributed: each machine gets a different subset of combos.
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn-primary" id="tune-run-btn" onclick="runTuning()" style="flex:1;margin:0">Find Best Model</button>
+        <button id="tune-stop-btn" onclick="stopTuning()" style="display:none;padding:10px 14px;background:var(--danger);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">■</button>
+      </div>
+
+      <div id="tune-merge-section" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+        <div class="section-label">Merge Results from Multiple Machines</div>
+        <textarea id="tune-merge-jobs" placeholder="Paste job IDs from other machines (one per line)"
+                  style="width:100%;height:60px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:6px;font-size:11px;font-family:var(--mono);color:var(--text);resize:vertical"></textarea>
+        <button onclick="mergeResults()" class="btn-secondary" style="width:100%;margin-top:6px">Merge & Show Best</button>
+      </div>
+    </div>
+  </div>
+  <div class="content">
+    <div id="tune-empty" class="empty-state">
+      <div class="empty-icon">⚙️</div>
+      <div class="empty-title">Model Tuning</div>
+      <div class="empty-sub">Tests all combinations of your features across multiple algorithms and ranks them by accuracy. Click "Find Best Model" to start. A "Use" button applies the best config directly to the Prediction tab.</div>
+    </div>
+    <div id="tune-progress-panel" style="display:none">
+      <div class="section-header">
+        <div class="section-title">Running Grid Search...</div>
+        <div class="section-count" id="tune-progress-badge">0 / 0</div>
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:16px;margin-bottom:16px">
+        <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+          <div id="tune-progress-bar" style="height:100%;width:0%;background:var(--accent);border-radius:4px;transition:width .3s ease"></div>
+        </div>
+        <div id="tune-progress-text" style="font-size:11px;color:var(--text3);margin-top:8px;font-family:var(--mono)">Starting...</div>
+      </div>
+      <div id="tune-live-results" style="padding:0 4px"></div>
+    </div>
+    <div id="tune-results" style="display:none">
+      <div class="section-header">
+        <div class="section-title">Best Configurations</div>
+        <div class="section-count" id="tune-count-badge">-</div>
+      </div>
+      <div class="stats-grid" id="tune-stats" style="margin-bottom:24px"></div>
+      <div class="panel" style="padding:0;overflow:hidden">
+        <table class="corr-table">
+          <thead><tr>
+            <th>#</th><th>Features</th><th>Algorithm</th>
+            <th>R2 Score</th><th>MAE</th><th></th>
+          </tr></thead>
+          <tbody id="tune-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<div class="heatmap-tooltip"" id="heatmap-tooltip"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+let appData = null;
+let corrData = null;
+let uvData = null;   // last undervalued response, for client-side sort
+let uvSortCol = 'gap_pct';  // current sort column
+let uvSortDir = -1;          // -1 = desc, +1 = asc
+let modelData = null;
+let predChartInstance = null;
+let scatterPoints = null;
+
+// =================== UPLOAD ===================
+function uploadFile(file) {
+  if (!file) return;
+  const zone = document.getElementById('upload-zone');
+  zone.innerHTML = `<div class="upload-icon">⏳</div><div class="upload-title"><span class="spinner"></span>Loading...</div>`;
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  fetch('/api/upload', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { showToast(data.error, 'error'); resetUpload(); return; }
+      appData = data;
+      updateUploadZone(file.name, data);
+      setupCorrelationUI(data);
+      setupPredictionUI(data);
+      setupImpactUI(data);
+      setupSegmentUI(data);
+      setupCityFilter(data);
+      setupTuningUI(data);
+      loadSavedModelsList();
+      setupCatFilters(data);
+      if (data.preview) {
+        appData._property_types = [...new Set(data.preview.map(r => r.property_type || r.type).filter(Boolean))];
+      }
+      appData._city_to_districts = data.city_to_districts || {};
+      setStatus(true, `${data.rows} rows · ${data.columns} columns`);
+      showToast(`Loaded: ${data.rows} rows, ${data.columns} columns`, 'success');
+    })
+    .catch(() => { showToast('Upload error', 'error'); resetUpload(); });
+}
+
+function updateUploadZone(name, data) {
+  const z = document.getElementById('upload-zone');
+  z.className = 'upload-zone has-file';
+  z.innerHTML = `
+    <div class="upload-icon">✅</div>
+    <div class="upload-title">${name}</div>
+    <div class="upload-sub">${data.rows} rows · ${data.numeric_columns.length} numeric columns</div>
+  `;
+}
+
+function resetUpload() {
+  const z = document.getElementById('upload-zone');
+  z.className = 'upload-zone';
+  z.innerHTML = '<div class="upload-icon">📂</div><div class="upload-title">Drag & drop CSV file</div><div class="upload-sub">or click to browse</div>';
+}
+
+// =================== SETUP UI ===================
+function setupCorrelationUI(data) {
+  document.getElementById('corr-controls').style.display = 'block';
+
+  // Focus column selector — default to price-like column
+  const focusSel = document.getElementById('corr-focus-col');
+  focusSel.innerHTML = '<option value="">All pairs</option>';
+  data.numeric_columns.forEach(col => {
+    focusSel.innerHTML += `<option value="${col}">${col}</option>`;
+  });
+  const priceHints = ['price', 'list_price', 'cost', 'value', 'sale'];
+  let priceIdx = -1;
+  data.numeric_columns.forEach((col, i) => {
+    if (priceHints.some(h => col.toLowerCase().includes(h))) priceIdx = i;
+  });
+  // +1 because first option is "All pairs"
+  if (priceIdx >= 0) focusSel.selectedIndex = priceIdx + 1;
+
+  const list = document.getElementById('corr-col-list');
+  list.innerHTML = '';
+  data.numeric_columns.forEach(col => {
+    list.innerHTML += `<label class="check-item"><input type="checkbox" value="${col}" checked> ${col}</label>`;
+  });
+
+  const sx = document.getElementById('scatter-x');
+  const sy = document.getElementById('scatter-y');
+  sx.innerHTML = sy.innerHTML = '';
+  data.numeric_columns.forEach((col, i) => {
+    sx.innerHTML += `<option value="${col}">${col}</option>`;
+    sy.innerHTML += `<option value="${col}" ${i===1?'selected':''}>${col}</option>`;
+  });
+}
+
+function setupPredictionUI(data) {
+  document.getElementById('pred-upload-msg').style.display = 'none';
+  document.getElementById('pred-controls').style.display = 'block';
+
+  // Target column selector — all columns
+  const targetSel = document.getElementById('target-col');
+  targetSel.innerHTML = '';
+  data.all_columns.forEach(col => {
+    targetSel.innerHTML += `<option value="${col}">${col}</option>`;
+  });
+
+  // Auto-select likely price/target column
+  const priceHints = ['price', 'list_price', 'cost', 'value', 'sale'];
+  let autoIdx = -1;
+  data.all_columns.forEach((col, i) => {
+    if (priceHints.some(h => col.toLowerCase().includes(h))) autoIdx = i;
+  });
+  if (autoIdx >= 0) targetSel.selectedIndex = autoIdx;
+
+  // Feature list — numeric + categorical columns, exclude obvious ID/URL cols
+  const skipHints = ['url', 'link', 'mls', 'address', 'notes', 'brokerage', 'agent'];
+  const list = document.getElementById('pred-feature-list');
+  list.innerHTML = '';
+  const usable = [...data.numeric_columns, ...data.categorical_columns]
+    .filter(col => !skipHints.some(h => col.toLowerCase().includes(h)));
+
+  const nullRates = data.null_rates || {};
+  usable.forEach(col => {
+    const isNum    = data.numeric_columns.includes(col);
+    const nullRate = nullRates[col] || 0;
+    const nullPct  = Math.round(nullRate * 100);
+    const checked  = nullRate <= 0.4;
+    const typeBadge = isNum
+      ? `<span style="font-size:10px;color:var(--accent);margin-left:4px">num</span>`
+      : `<span style="font-size:10px;color:var(--accent2);margin-left:4px">cat</span>`;
+    const nullBadge = nullPct > 0
+      ? `<span style="font-size:10px;margin-left:4px;color:${nullPct>40?'var(--danger)':nullPct>15?'var(--accent3)':'var(--text3)'}">${nullPct}% null</span>`
+      : '';
+    list.innerHTML += `<label class="check-item" style="${!checked?'opacity:0.5':''}"><input type="checkbox" value="${col}" ${checked?'checked':''}> ${col}${typeBadge}${nullBadge}</label>`;
+  });
+
+  // Re-apply correlation filter if already run; also wire target change
+  document.getElementById('target-col').onchange = applyCorrToFeatures;
+  if (corrData) applyCorrToFeatures();
+  // Auto-restore saved feature preset (only null-rate defaults, not corr-based)
+  const _savedPreset = localStorage.getItem(LS_FEATURES);
+  if (_savedPreset && !corrData) {
+    try {
+      const _p = JSON.parse(_savedPreset);
+      const _cs = new Set(_p.checked || []);
+      document.querySelectorAll('#pred-feature-list input').forEach(cb => {
+        const nr = appData?.null_rates?.[cb.value] || 0;
+        if (nr > 0.4) return;
+        cb.checked = _cs.has(cb.value);
+        cb.closest('label').style.opacity = cb.checked ? '1' : '0.4';
+      });
+    } catch(e) {}
+  }
+}
+
+// Auto-check only features correlated with the selected target above the threshold
+function applyCorrToFeatures() {
+  if (!corrData || !corrData.significant_correlations) return;
+  const target    = document.getElementById('target-col')?.value;
+  const threshold = corrData._threshold || 0.3;
+
+  const correlated = new Set();
+  corrData.significant_correlations.forEach(c => {
+    if (c.col1 === target) correlated.add(c.col2);
+    if (c.col2 === target) correlated.add(c.col1);
+  });
+
+  if (!correlated.size) return;
+
+  // Build corr value map for all cols
+  const corrValMap = {};
+  corrData.significant_correlations.forEach(c => {
+    if (c.col1 === target) corrValMap[c.col2] = c.correlation;
+    if (c.col2 === target) corrValMap[c.col1] = c.correlation;
+  });
+  // Also from full matrix
+  if (corrData.correlation_matrix?.[target]) {
+    Object.entries(corrData.correlation_matrix[target]).forEach(([col, val]) => {
+      if (!(col in corrValMap)) corrValMap[col] = val;
+    });
+  }
+
+  let changed = 0;
+  document.querySelectorAll('#pred-feature-list .check-item').forEach(label => {
+    const cb = label.querySelector('input[type=checkbox]');
+    if (!cb) return;
+    const col      = cb.value;
+    const nullRate = appData?.null_rates?.[col] || 0;
+
+    // Update check state
+    if (nullRate <= 0.4) {
+      const was = cb.checked;
+      cb.checked = correlated.has(col);
+      label.style.opacity = cb.checked ? '1' : '0.4';
+      if (cb.checked !== was) changed++;
+    }
+
+    // Add/update corr badge
+    label.querySelectorAll('.corr-badge').forEach(b => b.remove());
+    const r = corrValMap[col];
+    if (r !== undefined && r !== null) {
+      const abs   = Math.abs(r);
+      const color = abs >= 0.7 ? 'var(--success)' : abs >= 0.4 ? 'var(--accent)' : abs >= 0.2 ? 'var(--accent3)' : 'var(--text3)';
+      const sign  = r > 0 ? '+' : '';
+      const badge = document.createElement('span');
+      badge.className = 'corr-badge';
+      badge.style.cssText = `font-size:10px;margin-left:auto;color:${color};font-family:var(--mono);font-weight:600`;
+      badge.textContent = `r=${sign}${r.toFixed(2)}`;
+      label.appendChild(badge);
+    }
+  });
+
+  if (changed > 0)
+    showToast(`Auto-selected ${correlated.size} features correlated with "${target}" (r≥${threshold})`, 'success');
+}
+
+// =================== CORRELATION ===================
+function runCorrelation() {
+  const threshold = parseFloat(document.getElementById('threshold').value);
+  const checkedCols = [...document.querySelectorAll('#corr-col-list input:checked')].map(c => c.value);
+
+  const focusCol = document.getElementById('corr-focus-col').value;
+  fetch('/api/correlation', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ threshold, columns: checkedCols, focus_column: focusCol || null })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { showToast(data.error, 'error'); return; }
+    corrData = data;
+    corrData._threshold = parseFloat(document.getElementById('threshold').value);
+    showCorrelationResults(data);
+    applyCorrToFeatures();
+    updateCorrColBadges(data);
+  });
+}
+
+function updateCorrColBadges(data) {
+  const focusCol = document.getElementById('corr-focus-col').value;
+  if (!focusCol) return;
+  // Build a map: col → correlation with focusCol
+  const corrMap = {};
+  data.significant_correlations.forEach(c => {
+    if (c.col1 === focusCol) corrMap[c.col2] = c.correlation;
+    if (c.col2 === focusCol) corrMap[c.col1] = c.correlation;
+  });
+  // Also include all pairs from matrix_data for non-significant ones
+  if (data.correlation_matrix && data.correlation_matrix[focusCol]) {
+    Object.entries(data.correlation_matrix[focusCol]).forEach(([col, val]) => {
+      if (col !== focusCol && !(col in corrMap)) corrMap[col] = val;
+    });
+  }
+  document.querySelectorAll('#corr-col-list .check-item').forEach(label => {
+    const cb  = label.querySelector('input');
+    const col = cb?.value;
+    if (!col || col === focusCol) return;
+    const r = corrMap[col];
+    // Remove old badge if any
+    label.querySelectorAll('.corr-badge').forEach(b => b.remove());
+    if (r !== undefined && r !== null) {
+      const abs = Math.abs(r);
+      const color = abs >= 0.7 ? 'var(--success)' : abs >= 0.4 ? 'var(--accent)' : abs >= 0.2 ? 'var(--accent3)' : 'var(--text3)';
+      const sign = r > 0 ? '+' : '';
+      const badge = document.createElement('span');
+      badge.className = 'corr-badge';
+      badge.style.cssText = `font-size:10px;margin-left:auto;color:${color};font-family:var(--mono);font-weight:600`;
+      badge.textContent = `r=${sign}${r.toFixed(2)}`;
+      label.appendChild(badge);
+    }
+  });
+}
+
+function showCorrelationResults(data) {
+  document.getElementById('corr-empty').style.display = 'none';
+  document.getElementById('corr-results').style.display = 'block';
+  document.getElementById('corr-count').textContent = `${data.total_significant} pairs`;
+  const titleEl = document.getElementById('corr-section-title');
+  if (titleEl) titleEl.textContent = data.focus_column
+    ? `Correlations with "${data.focus_column}"`
+    : 'Correlation Matrix';
+
+  // Stats
+  const grid = document.getElementById('corr-stats-grid');
+  const strongest = data.significant_correlations[0];
+  grid.innerHTML = `
+    <div class="stat-card"><div class="stat-val">${data.columns.length}</div><div class="stat-label">Columns</div></div>
+    <div class="stat-card"><div class="stat-val">${data.total_significant}</div><div class="stat-label">Significant pairs</div></div>
+    <div class="stat-card"><div class="stat-val">${strongest ? Math.abs(strongest.correlation).toFixed(2) : '—'}</div><div class="stat-label">Max correlation</div></div>
+    <div class="stat-card"><div class="stat-val">${data.significant_correlations.filter(c=>c.correlation>0).length}</div><div class="stat-label">Positive</div></div>
+  `;
+
+  renderHeatmap(data);
+  renderCorrTable(data.significant_correlations);
+}
+
+function renderHeatmap(data) {
+  // Backend already filters to relevant columns when focus_column is set
+  const cols = data.columns;
+  const n = cols.length;
+  if (n === 0) { document.getElementById('heatmap-canvas').getContext('2d').clearRect(0,0,9999,9999); return; }
+
+  const cellSize = Math.max(32, Math.min(64, Math.floor(460 / n)));
+  const labelSize = 110;
+  const w = labelSize + n * cellSize;
+  const h = labelSize + n * cellSize;
+
+  const canvas = document.getElementById('heatmap-canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+
+  // Build lookup
+  const matrix = {};
+  data.matrix_data.forEach(d => {
+    if (!matrix[d.col1]) matrix[d.col1] = {};
+    matrix[d.col1][d.col2] = d.value;
+  });
+
+  function getColor(val) {
+    if (val > 0) {
+      const t = val;
+      return `rgba(200, 240, 74, ${0.15 + t * 0.85})`;
+    } else {
+      const t = Math.abs(val);
+      return `rgba(255, 95, 95, ${0.15 + t * 0.85})`;
+    }
+  }
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Draw cells
+  cols.forEach((col1, i) => {
+    cols.forEach((col2, j) => {
+      const val = (matrix[col1] && matrix[col1][col2] !== undefined) ? matrix[col1][col2] : 0;
+      ctx.fillStyle = getColor(val);
+      ctx.fillRect(labelSize + j * cellSize, labelSize + i * cellSize, cellSize - 1, cellSize - 1);
+
+      ctx.fillStyle = Math.abs(val) > 0.5 ? '#000' : '#8a8f9e';
+      ctx.font = `${Math.min(11, cellSize / 3.5)}px 'DM Mono'`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(val.toFixed(2), labelSize + j * cellSize + cellSize / 2, labelSize + i * cellSize + cellSize / 2);
+    });
+  });
+
+  // Column labels (top)
+  ctx.fillStyle = '#8a8f9e';
+  ctx.font = `${Math.min(11, cellSize / 3.5)}px Inter`;
+  ctx.textBaseline = 'bottom';
+  cols.forEach((col, j) => {
+    ctx.save();
+    ctx.translate(labelSize + j * cellSize + cellSize / 2, labelSize - 4);
+    ctx.rotate(-Math.PI / 4);
+    ctx.textAlign = 'left';
+    ctx.fillText(col.length > 12 ? col.substring(0, 12) + '…' : col, 0, 0);
+    ctx.restore();
+  });
+
+  // Row labels (left)
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  cols.forEach((col, i) => {
+    const lbl = col.length > 16 ? col.substring(0, 16) + '…' : col;
+    ctx.fillText(lbl, labelSize - 6, labelSize + i * cellSize + cellSize / 2);
+  });
+
+  // Tooltip
+  canvas.onmousemove = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const ci = Math.floor((mx - labelSize) / cellSize);
+    const ri = Math.floor((my - labelSize) / cellSize);
+    const tip = document.getElementById('heatmap-tooltip');
+    if (ci >= 0 && ci < n && ri >= 0 && ri < n) {
+      const val = (matrix[cols[ri]] && matrix[cols[ri]][cols[ci]] !== undefined) ? matrix[cols[ri]][cols[ci]] : 0;
+      tip.style.display = 'block';
+      tip.style.left = (e.clientX + 12) + 'px';
+      tip.style.top = (e.clientY - 8) + 'px';
+      tip.innerHTML = `<b>${cols[ri]}</b> × <b>${cols[ci]}</b><br>r = ${val.toFixed(4)}`;
+    } else {
+      tip.style.display = 'none';
+    }
+  };
+  canvas.onmouseleave = () => { document.getElementById('heatmap-tooltip').style.display = 'none'; };
+}
+
+function renderCorrTable(rows) {
+  const tbody = document.getElementById('corr-table-body');
+  tbody.innerHTML = '';
+  rows.forEach(r => {
+    const pct = Math.abs(r.correlation) * 100;
+    const color = r.correlation > 0 ? 'var(--success)' : 'var(--danger)';
+    tbody.innerHTML += `
+      <tr>
+        <td style="font-family:var(--mono);font-size:12px">${r.col1}</td>
+        <td style="font-family:var(--mono);font-size:12px">${r.col2}</td>
+        <td>
+          <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:${color}">${r.correlation.toFixed(4)}</span>
+          <div class="corr-bar"><div class="corr-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+        </td>
+        <td><span style="font-size:12px;color:var(--text2)">${r.strength}</span></td>
+        <td><span class="badge ${r.correlation>0?'badge-pos':'badge-neg'}">${r.direction}</span></td>
+      </tr>`;
+  });
+}
+
+// =================== SCATTER ===================
+function loadScatter() {
+  const x = document.getElementById('scatter-x').value;
+  const y = document.getElementById('scatter-y').value;
+  if (!x || !y) return;
+
+  fetch('/api/scatter', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ col1: x, col2: y })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { showToast(data.error, 'error'); return; }
+    scatterPoints = data;
+    if (document.getElementById('view-scatter').style.display !== 'none') {
+      drawScatter(data);
+    }
+  });
+}
+
+function drawScatter(data) {
+  const canvas = document.getElementById('scatter-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const pad = 50;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#131519';
+  ctx.fillRect(0, 0, W, H);
+
+  if (!data.points || data.points.length === 0) return;
+
+  const xs = data.points.map(p => p.x);
+  const ys = data.points.map(p => p.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const rangeX = maxX - minX || 1, rangeY = maxY - minY || 1;
+
+  const toX = v => pad + ((v - minX) / rangeX) * (W - 2 * pad);
+  const toY = v => H - pad - ((v - minY) / rangeY) * (H - 2 * pad);
+
+  // Grid
+  ctx.strokeStyle = '#252830';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 5; i++) {
+    const gx = pad + i * (W - 2*pad) / 5;
+    const gy = pad + i * (H - 2*pad) / 5;
+    ctx.beginPath(); ctx.moveTo(gx, pad); ctx.lineTo(gx, H-pad); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad, gy); ctx.lineTo(W-pad, gy); ctx.stroke();
+  }
+
+  // Points
+  data.points.forEach(p => {
+    ctx.beginPath();
+    ctx.arc(toX(p.x), toY(p.y), 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(200,240,74,0.55)';
+    ctx.fill();
+  });
+
+  // Regression line
+  const n = xs.length;
+  const mx = xs.reduce((a,b)=>a+b,0)/n, my = ys.reduce((a,b)=>a+b,0)/n;
+  const num = xs.reduce((s,x,i)=>s+(x-mx)*(ys[i]-my),0);
+  const den = xs.reduce((s,x)=>s+(x-mx)**2,0);
+  const slope = num/den, intercept = my - slope*mx;
+  ctx.beginPath();
+  ctx.moveTo(toX(minX), toY(slope*minX+intercept));
+  ctx.lineTo(toX(maxX), toY(slope*maxX+intercept));
+  ctx.strokeStyle = 'rgba(141,232,196,0.7)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Labels
+  ctx.fillStyle = '#5a5f6e';
+  ctx.font = '11px Inter';
+  ctx.textAlign = 'center';
+  ctx.fillText(data.col1, W/2, H-8);
+  ctx.save(); ctx.translate(14, H/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText(data.col2, 0, 0); ctx.restore();
+}
+
+// =================== TRAIN ===================
+function trainModel() {
+  const target = document.getElementById('target-col').value;
+  const features = [...document.querySelectorAll('#pred-feature-list input:checked')]
+    .map(c => c.value)
+    .filter(v => v !== target);
+  const modelType = document.getElementById('model-type').value;
+
+  if (!features.length) { showToast('Select at least one feature', 'error'); return; }
+
+  const btn = document.getElementById('train-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Training...';
+
+  fetch('/api/train', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ target_column: target, feature_columns: features, model_type: modelType, remove_outliers: document.getElementById('remove-outliers').checked, use_log_target: document.getElementById('use-log-target').checked })
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false;
+    btn.textContent = 'Train Model';
+    if (data.error) { showToast(data.error, 'error'); return; }
+    modelData = data;
+    showPredResults(data);
+    savePredValues();  // save current inputs before form rebuilds
+    showToast(`Model trained! R² = ${(data.r2_score*100).toFixed(1)}%`, 'success');
+    const ptEnc = data.encoders?.property_type || data.encoders?.type;
+    if (ptEnc?.classes) appData._property_types = ptEnc.classes;
+    showUndervaluedControls();
+    document.getElementById('analyse-btn').style.display = 'block';
+  })
+  .catch(() => { btn.disabled = false; btn.textContent = 'Train Model'; showToast('Training error', 'error'); });
+}
+
+function showPredResults(data) {
+  document.getElementById('pred-empty').style.display = 'none';
+  document.getElementById('pred-results').style.display = 'block';
+  document.getElementById('save-model-btn').disabled = false;
+
+  const modelNames = { random_forest: 'Random Forest', gradient_boosting: 'Gradient Boosting', linear: 'Linear Regression' };
+  document.getElementById('model-type-badge').textContent = modelNames[data.model_type] || data.model_type;
+  document.getElementById('model-config-summary').style.display = 'block';
+  const _af = (typeof getGlobalFilters === 'function') ? getGlobalFilters() : {};
+  const _afParts = Object.entries(_af).map(([k,v]) => Array.isArray(v) ? k+': '+v.join(', ') : k+': '+v);
+  document.getElementById('model-filter-info').textContent = _afParts.length ? _afParts.join('  -  ') + '  (' + (data.train_size+data.test_size) + ' rows)' : 'All data  (' + (data.train_size+data.test_size) + ' rows)';
+  document.getElementById('model-features-info').innerHTML = data.feature_importance.map(f => '<span style="display:inline-block;padding:2px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;font-size:11px;color:var(--text2)">'+f.feature+'</span>').join('');
+
+  const r2 = data.r2_score;
+  document.getElementById('r2-val').textContent = (r2 * 100).toFixed(1) + '%';
+  document.getElementById('r2-val').style.color = r2 > 0.7 ? 'var(--success)' : r2 > 0.4 ? 'var(--accent3)' : 'var(--danger)';
+  document.getElementById('mae-val').textContent = '$' + Math.round(data.mae).toLocaleString('en-CA');
+  // CV score (returned from backend)
+  if (data.r2_cv !== undefined && data.r2_cv !== null) {
+    const r2cv = data.r2_cv;
+    document.getElementById('r2-cv-val').textContent = (r2cv * 100).toFixed(1) + '%';
+    document.getElementById('r2-cv-val').style.color = r2cv > 0.7 ? 'var(--success)' : r2cv > 0.4 ? 'var(--accent3)' : 'var(--danger)';
+    document.getElementById('mae-cv-val').textContent = data.mae_cv ? '$' + Math.round(data.mae_cv).toLocaleString('en-CA') : '–';
+  } else {
+    document.getElementById('r2-cv-val').textContent = '–';
+    document.getElementById('mae-cv-val').textContent = '–';
+  }
+  if (data.outliers_removed > 0) {
+    showToast(`Removed ${data.outliers_removed} outlier rows before training`, 'success');
+  }
+  // Explain R² score in plain language
+  const r2Note = document.getElementById('r2-note');
+  if (r2Note) {
+    const n = data.train_size + data.test_size;
+    let note = '';
+    if (r2 < 0.5 && n < 200) note = 'Low — only '+n+' rows. Add more data or features.';
+    else if (r2 < 0.5) note = 'Model explains <50% of variance. Add location features (district, city).';
+    else if (r2 < 0.7) note = 'Fair. Tuning may show 2-5% higher R2 — expected due to encoding method.';
+    else if (r2 < 0.85) note = 'Good. Tuning may show +2-5% higher — normal difference in CV methodology.';
+    else note = 'Excellent — verify no data leakage.';
+    r2Note.textContent = note;
+  }
+
+  // Feature importance
+  const bars = document.getElementById('importance-bars');
+  bars.innerHTML = '';
+  data.feature_importance.forEach(f => {
+    bars.innerHTML += `
+      <div class="importance-bar">
+        <div class="importance-name" title="${f.feature}">${f.feature}</div>
+        <div class="importance-track"><div class="importance-fill" style="width:${(f.importance*100).toFixed(1)}%"></div></div>
+        <div class="importance-pct">${(f.importance*100).toFixed(1)}%</div>
+      </div>`;
+  });
+
+  // Actual vs Predicted chart
+  renderPredChart(data.actual_vs_predicted);
+
+  // Predict form
+  buildPredictForm(data);
+}
+
+function renderPredChart(points) {
+  const canvas = document.getElementById('pred-chart');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const pad = 40;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = 'transparent';
+
+  if (!points || points.length === 0) return;
+
+  const vals = points.flatMap(p => [p.actual, p.predicted]);
+  const minV = Math.min(...vals), maxV = Math.max(...vals);
+  const rangeV = maxV - minV || 1;
+  const n = points.length;
+
+  const toX = i => pad + i * (W - 2*pad) / (n-1);
+  const toY = v => H - pad - ((v - minV) / rangeV) * (H - 2*pad);
+
+  // Actual line
+  ctx.beginPath();
+  points.forEach((p, i) => i === 0 ? ctx.moveTo(toX(i), toY(p.actual)) : ctx.lineTo(toX(i), toY(p.actual)));
+  ctx.strokeStyle = 'rgba(200,240,74,0.8)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Predicted line
+  ctx.beginPath();
+  points.forEach((p, i) => i === 0 ? ctx.moveTo(toX(i), toY(p.predicted)) : ctx.lineTo(toX(i), toY(p.predicted)));
+  ctx.strokeStyle = 'rgba(141,232,196,0.8)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 3]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Legend
+  ctx.font = '11px Inter';
+  ctx.fillStyle = 'rgba(200,240,74,0.8)';
+  ctx.fillRect(W - 150, 10, 12, 3);
+  ctx.fillStyle = '#8a8f9e';
+  ctx.fillText('Actual', W - 134, 14);
+  ctx.fillStyle = 'rgba(141,232,196,0.8)';
+  ctx.fillRect(W - 70, 10, 12, 3);
+  ctx.fillStyle = '#8a8f9e';
+  ctx.fillText('Predicted', W - 54, 14);
+}
+
+// Persist predict form values across model retrains
+let _savedPredValues = {};
+
+function savePredValues() {
+  if (!modelData) return;
+  modelData.feature_importance.forEach(f => {
+    const el = document.getElementById(`pred-input-${f.feature}`);
+    if (!el) return;
+    _savedPredValues[f.feature] = el.multiple
+      ? [...el.selectedOptions].map(o => o.value)
+      : el.value;
+  });
+}
+
+function buildPredictForm(data) {
+  const container = document.getElementById('predict-inputs');
+  const features  = data.feature_importance.map(f => f.feature);
+
+  const html = features.map(col => {
+    const ft   = data.feature_types[col];
+    const enc  = data.encoders[col];
+    const prev = _savedPredValues[col];  // previously entered value
+    let inputHtml;
+
+    if ((ft === 'categorical' || ft === 'target_encoded') && enc && enc.classes && enc.classes.length) {
+      const opts = enc.classes.map(c =>
+        `<option value="${c}"${c === prev ? ' selected' : ''}>${c}</option>`
+      ).join('');
+      const extraAttr = col === 'city' ? ` onchange="filterPredictDistrict(this.value)"` : '';
+      inputHtml = `<select id="pred-input-${col}"${extraAttr}>${opts}</select>`;
+
+    } else if (ft === 'multi_ohe' && enc && enc.classes && enc.classes.length) {
+      const prevSet = Array.isArray(prev) ? new Set(prev) : new Set();
+      const opts = enc.classes.map(c =>
+        `<option value="${c}"${prevSet.has(c) ? ' selected' : ''}>${c}</option>`
+      ).join('');
+      inputHtml = `<select id="pred-input-${col}" multiple style="height:80px">${opts}</select>`;
+
+    } else {
+      const val = (prev !== undefined && prev !== '') ? ` value="${prev}"` : '';
+      inputHtml = `<input type="number" id="pred-input-${col}" placeholder="0"${val}>`;
+    }
+    return `<div class="predict-field"><label>${col}</label>${inputHtml}</div>`;
+  }).join('');
+
+  container.innerHTML = html;
+
+  const targetCol = document.getElementById('target-col').value;
+  document.getElementById('pred-target-label').textContent = `Predicted value (${targetCol})`;
+}
+
+function filterPredictDistrict(cityVal) {
+  const distSel = document.getElementById('pred-input-district');
+  if (!distSel || !appData || !appData._city_to_districts) return;
+  const districts = appData._city_to_districts[cityVal] || [];
+  if (!districts.length) return;  // no mapping — keep all options visible
+  const prev = distSel.value;
+  // Filter options: show only districts belonging to this city
+  [...distSel.options].forEach(opt => {
+    const inCity = districts.includes(opt.value) || opt.value === '';
+    opt.style.display = inCity ? '' : 'none';
+    opt.disabled = !inCity;
+  });
+  // Reset to first valid district if current isn't in this city
+  if (!districts.includes(prev)) {
+    const firstValid = distSel.querySelector('option:not([disabled])');
+    if (firstValid) distSel.value = firstValid.value;
+  }
+}
+
+function runPrediction() {
+  if (!modelData) { showToast('Train the model first', 'error'); return; }
+  savePredValues();
+
+  const values = {};
+  modelData.feature_importance.forEach(f => {
+    const el = document.getElementById(`pred-input-${f.feature}`);
+    if (!el) return;
+    if (el.multiple) {
+      // multi-select: join selected options with comma
+      values[f.feature] = [...el.selectedOptions].map(o => o.value).join(',');
+    } else {
+      values[f.feature] = el.value;
+    }
+  });
+
+  fetch('/api/predict', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ values })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { showToast(data.error, 'error'); return; }
+    const res = document.getElementById('prediction-result');
+    document.getElementById('pred-value').textContent = data.prediction.toLocaleString('en-CA');
+    document.getElementById('pred-unit').textContent = `Predicted ${data.target_col}  ·  MAE ±$${Math.round(modelData.mae || 0).toLocaleString('en-CA')}`;
+    res.classList.add('show');
+    // Also load similar listings
+    loadSimilarListings(values);
+  });
+}
+
+function loadSimilarListings(values) {
+  fetch('/api/similar_listings', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ values, top_n: 5 })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error || !data.similar) return;
+    renderSimilarListings(data);
+  });
+}
+
+function renderSimilarListings(data) {
+  const panel = document.getElementById('similar-panel');
+  const tbody = document.getElementById('similar-tbody');
+  const badge = document.getElementById('similar-count-badge');
+  panel.style.display = 'block';
+  badge.textContent = `${data.similar.length} found`;
+
+  const fmt    = v => '$' + Math.round(v).toLocaleString('en-CA');
+  const target = data.target_col;
+
+  tbody.innerHTML = data.similar.map(r => {
+    const addr  = r.street || '—';
+    const type  = (r.property_type || '').replace(' for sale','');
+    const loc   = [r.city, r.district].filter(Boolean).join(' / ') || '—';
+    const beds  = r.bedrooms  ? `${parseFloat(r.bedrooms).toFixed(0)}bd` : '';
+    const baths = r.bathrooms ? `${parseFloat(r.bathrooms).toFixed(0)}ba` : '';
+    const sqft  = r.floor_area_sqft ? `${Math.round(parseFloat(r.floor_area_sqft))}sqft` : '';
+    const specs = [beds, baths, sqft].filter(Boolean).join(' / ');
+    const price = r[target] ? fmt(r[target]) : '—';
+    const url   = r.summary_url || '';
+    const addrCell = url
+      ? `<a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none">${addr} 🔗</a>`
+      : addr;
+    // Similarity: convert distance to % (lower distance = more similar)
+    const simPct = Math.max(0, Math.round((1 - Math.min(r.distance, 1)) * 100));
+    const simColor = simPct >= 80 ? 'var(--success)' : simPct >= 60 ? 'var(--accent)' : 'var(--text2)';
+    return `<tr>
+      <td style="font-size:12px;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${addrCell}</td>
+      <td style="font-size:11px;color:var(--text2)">${type}</td>
+      <td style="font-size:11px;color:var(--text2)">${loc}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${specs}</td>
+      <td style="font-family:var(--mono);font-size:12px;font-weight:600">${price}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;height:5px;background:var(--border);border-radius:3px;min-width:40px">
+            <div style="height:100%;width:${simPct}%;background:${simColor};border-radius:3px"></div>
+          </div>
+          <span style="font-family:var(--mono);font-size:11px;color:${simColor}">${simPct}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// =================== UI HELPERS ===================
+function switchPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function switchView(view, btn) {
+  ['heatmap','table','scatter'].forEach(v => {
+    document.getElementById(`view-${v}`).style.display = v === view ? 'block' : 'none';
+  });
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  if (view === 'scatter' && scatterPoints) drawScatter(scatterPoints);
+  if (view === 'scatter' && !scatterPoints) loadScatter();
+}
+
+function setStatus(active, text) {
+  document.getElementById('status-dot').className = 'status-dot' + (active ? ' active' : '');
+  document.getElementById('status-text').textContent = text;
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+// =================== CATEGORY IMPACT ===================
+function setupImpactUI(data) {
+  document.getElementById('impact-upload-msg').style.display = 'none';
+  document.getElementById('impact-controls').style.display = 'block';
+
+  const sel = document.getElementById('impact-target-col');
+  sel.innerHTML = '';
+  data.numeric_columns.forEach(col => {
+    sel.innerHTML += `<option value="${col}">${col}</option>`;
+  });
+  const priceHints = ['price', 'list_price', 'cost', 'value', 'sale'];
+  data.numeric_columns.forEach((col, i) => {
+    if (priceHints.some(h => col.toLowerCase().includes(h))) sel.selectedIndex = i;
+  });
+
+  // Column checkboxes — auto-uncheck if >20 unique values (too granular to be useful)
+  const nUnique = data.cat_n_unique || {};
+  const skipHints = ['url','link','mls','street','address','summary','virtual','agency'];
+  const list = document.getElementById('impact-col-list');
+  list.innerHTML = '';
+  data.categorical_columns
+    .filter(col => !skipHints.some(h => col.toLowerCase().includes(h)))
+    .forEach(col => {
+      const n       = nUnique[col] || 0;
+      const checked = n <= 20;
+      const badge   = n > 0
+        ? `<span style="font-size:10px;margin-left:4px;color:${n>20?'var(--danger)':n>10?'var(--accent3)':'var(--text3)'}">${n} vals</span>`
+        : '';
+      list.innerHTML += `<label class="check-item" style="${!checked?'opacity:0.55':''}">
+        <input type="checkbox" value="${col}" ${checked?'checked':''}> ${col}${badge}
+      </label>`;
+    });
+}
+
+function impactCheckAll(state) {
+  document.querySelectorAll('#impact-col-list input').forEach(cb => cb.checked = state);
+}
+
+function runImpact() {
+  const target = document.getElementById('impact-target-col').value;
+  if (!target) return;
+
+  const includeCols = [...document.querySelectorAll('#impact-col-list input:checked')].map(c => c.value);
+  if (!includeCols.length) { showToast('Select at least one column', 'error'); return; }
+
+  const results = document.getElementById('impact-results');
+  results.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-title">Analysing...</div></div>';
+  results.style.display = 'block';
+  document.getElementById('impact-empty').style.display = 'none';
+
+  const delimiter = document.getElementById('impact-delimiter').value;
+  fetch('/api/category_impact', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ target_column: target, include_columns: includeCols,
+                           delimiter: delimiter || '' })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { showToast(data.error, 'error'); return; }
+    renderImpact(data);
+  });
+}
+
+function renderImpact(data) {
+  const container = document.getElementById('impact-results');
+  const fmt = v => '$' + Math.round(v).toLocaleString('en-CA');
+  const pctColor = p => p > 0 ? 'var(--success)' : p < 0 ? 'var(--danger)' : 'var(--text3)';
+  const pctSign  = p => p > 0 ? '+' : '';
+
+  const overallMax = Math.max(...data.results.flatMap(r => r.groups.map(g => g.mean)));
+
+  let html = `
+    <div class="section-header">
+      <div class="section-title">Category Impact</div>
+      <div class="section-count">${data.results.length} columns</div>
+    </div>
+    <div class="stats-grid" style="margin-bottom:28px">
+      <div class="stat-card"><div class="stat-val" style="font-size:22px">${fmt(data.overall_mean)}</div><div class="stat-label">Overall Mean ${data.target_col}</div></div>
+      <div class="stat-card"><div class="stat-val" style="font-size:22px">${fmt(data.overall_median)}</div><div class="stat-label">Overall Median ${data.target_col}</div></div>
+    </div>`;
+
+  data.results.forEach(col => {
+    const colMax = Math.max(...col.groups.map(g => g.mean));
+    html += `
+    <div class="panel" style="margin-bottom:24px">
+      <div class="panel-title">${col.column} <span>${col.n_categories} categories${col.split_by ? ` · split by "${col.split_by}"` : ''}</span></div>
+      <div style="overflow-x:auto">
+        <table class="corr-table" style="min-width:500px">
+          <thead><tr>
+            <th>Value</th>
+            <th>Mean ${data.target_col}</th>
+            <th>vs Average</th>
+            <th>Distribution</th>
+            <th>Count</th>
+            <th>Range</th>
+          </tr></thead>
+          <tbody>`;
+
+    col.groups.forEach(g => {
+      const barW = Math.round((g.mean / overallMax) * 100);
+      const avgLineW = Math.round((data.overall_mean / overallMax) * 100);
+      html += `
+            <tr>
+              <td style="font-weight:600;font-size:13px">${g.value}</td>
+              <td style="font-family:var(--mono);font-size:13px;font-weight:600">${fmt(g.mean)}</td>
+              <td>
+                <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${pctColor(g.pct_diff)}">
+                  ${pctSign(g.pct_diff)}${g.pct_diff}%
+                </span>
+              </td>
+              <td style="min-width:140px">
+                <div style="position:relative;height:10px;background:var(--border);border-radius:5px;overflow:visible">
+                  <div style="position:absolute;left:0;top:0;height:100%;width:${barW}%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:5px;transition:width 0.6s ease"></div>
+                  <div style="position:absolute;top:-3px;bottom:-3px;left:${avgLineW}%;width:2px;background:var(--accent3);border-radius:1px" title="Overall average"></div>
+                </div>
+              </td>
+              <td style="font-family:var(--mono);font-size:12px;color:var(--text2)">${g.count}</td>
+              <td style="font-size:11px;color:var(--text3)">${fmt(g.min)} – ${fmt(g.max)}</td>
+            </tr>`;
+    });
+
+    html += `</tbody></table></div></div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+// =================== END CATEGORY IMPACT ===================
+
+// =================== FEATURE ANALYSIS ===================
+function runFeatureAnalysis() {
+  const target    = document.getElementById('target-col').value;
+  const modelType = document.getElementById('model-type').value;
+  // Collect ALL features in the list (not just checked) — analysis covers everything
+  const features  = [...document.querySelectorAll('#pred-feature-list input[type=checkbox]')].map(c => c.value);
+  if (!features.length) { showToast('No features available', 'error'); return; }
+
+  const btn = document.getElementById('analyse-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Analysing...';
+
+  const selected = [...document.querySelectorAll('#pred-feature-list input:checked')].map(c => c.value);
+  fetch('/api/feature_analysis', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      target_column:     target,
+      feature_columns:   features,   // ALL features to analyse
+      selected_columns:  selected,   // currently checked = baseline
+      model_type:        modelType,
+      remove_outliers:   document.getElementById('remove-outliers').checked,
+      use_log_target:    document.getElementById('use-log-target').checked
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false;
+    btn.textContent = 'Analyse Feature Impact';
+    if (data.error) { showToast(data.error, 'error'); return; }
+    renderFeatureAnalysis(data);
+  })
+  .catch(() => { btn.disabled = false; btn.textContent = 'Analyse Feature Impact'; });
+}
+
+function renderFeatureAnalysis(data) {
+  document.getElementById('feature-analysis-panel').style.display = 'block';
+  document.getElementById('fa-badge').textContent =
+    `baseline R² ${data.base_r2 ?? '—'}%  ·  MAE $${data.base_mae ? Math.round(data.base_mae).toLocaleString('en-CA') : '—'}`;
+
+  const fmt = v => v === null || v === undefined ? '—' : '$' + Math.round(v).toLocaleString('en-CA');
+  const recColors = {
+    'keep — critical':    'var(--success)',
+    'keep — helpful':     'var(--accent)',
+    'optional':           'var(--text2)',
+    'consider removing':  'var(--danger)',
+    'add — big gain':     'var(--success)',
+    'worth adding':       'var(--accent)',
+    'minor effect':       'var(--text2)',
+    'skip — hurts model': 'var(--danger)',
+    'unknown':            'var(--text3)'
+  };
+  const recIcons = {
+    'keep — critical':    '✅',
+    'keep — helpful':     '👍',
+    'optional':           '➖',
+    'consider removing':  '⚠️',
+    'add — big gain':     '🚀',
+    'worth adding':       '➕',
+    'minor effect':       '➖',
+    'skip — hurts model': '❌',
+    'unknown':            '?'
+  };
+
+  const tbody = document.getElementById('fa-tbody');
+  tbody.innerHTML = '';
+  data.features.forEach(f => {
+    const statusColor = f.in_baseline ? 'var(--accent)'  : 'var(--text3)';
+    const statusLabel = f.in_baseline ? '✓ selected'     : '○ not selected';
+
+    const corrColor = f.corr === null ? 'var(--text3)'
+      : Math.abs(f.corr) >= 0.7 ? 'var(--success)'
+      : Math.abs(f.corr) >= 0.4 ? 'var(--accent)'
+      : Math.abs(f.corr) >= 0.2 ? 'var(--accent3)' : 'var(--text3)';
+    const corrStr = f.corr === null ? '—'
+      : `<span style="color:${corrColor};font-family:var(--mono);font-weight:600">${f.corr>0?'+':''}${f.corr.toFixed(2)}</span>`;
+
+    // delta_r2: positive = good (feature contributes / adding helps)
+    const dr2Color = f.delta_r2 === null ? 'var(--text3)'
+      : f.delta_r2 >= 5 ? 'var(--success)' : f.delta_r2 >= 1 ? 'var(--accent)'
+      : f.delta_r2 >= -1 ? 'var(--text2)' : 'var(--danger)';
+    const dr2Sign  = f.delta_r2 !== null ? (f.delta_r2 >= 0 ? '+' : '') : '';
+    const dr2Str   = f.delta_r2 === null ? '—'
+      : `<span style="color:${dr2Color};font-family:var(--mono);font-weight:700">${dr2Sign}${f.delta_r2}%</span>`;
+    const dr2Sub   = f.r2_alt !== null
+      ? `<div style="font-size:10px;color:var(--text3)">${f.alt_label}: ${f.r2_alt}%</div>` : '';
+
+    // delta_mae: positive = good (removing costs / adding saves)
+    const dmColor  = f.delta_mae === null ? 'var(--text3)'
+      : f.delta_mae > 5000 ? 'var(--success)' : f.delta_mae > 0 ? 'var(--accent)'
+      : f.delta_mae > -5000 ? 'var(--text2)' : 'var(--danger)';
+    const dmSign   = f.delta_mae !== null ? (f.delta_mae >= 0 ? '-' : '+') : '';
+    const dmStr    = f.delta_mae === null ? '—'
+      : `<span style="color:${dmColor};font-family:var(--mono);font-weight:700">${dmSign}${fmt(Math.abs(f.delta_mae))}</span>`;
+    const dmSub    = f.mae_alt !== null
+      ? `<div style="font-size:10px;color:var(--text3)">${f.alt_label.replace('R²','MAE')}: ${fmt(f.mae_alt)}</div>` : '';
+
+    const recColor = recColors[f.recommendation] || 'var(--text3)';
+    const recIcon  = recIcons[f.recommendation]  || '?';
+
+    tbody.innerHTML += `
+      <tr style="${!f.in_baseline ? 'opacity:0.75' : ''}">
+        <td>
+          <div style="font-weight:600;font-size:12px">${f.feature}</div>
+          <div style="font-size:10px;color:${statusColor}">${statusLabel}</div>
+        </td>
+        <td>${corrStr}</td>
+        <td>${dr2Str}${dr2Sub}</td>
+        <td>${dmStr}${dmSub}</td>
+        <td><span style="color:${recColor};font-size:11px;font-weight:600">${recIcon} ${f.recommendation}</span></td>
+      </tr>`;
+  });
+}
+
+// =================== END FEATURE ANALYSIS ===================
+
+// =================== SEGMENT MODELS ===================
+let segmentData = null;  // full response from /api/segment_train
+
+function setupSegmentUI(data) {
+  document.getElementById('seg-upload-msg').style.display = 'none';
+  document.getElementById('seg-controls').style.display  = 'block';
+
+  const skipHints = ['url','link','mls','address','notes','street','photos'];
+  const usable = [...data.numeric_columns, ...data.categorical_columns]
+    .filter(c => !skipHints.some(h => c.toLowerCase().includes(h)));
+
+  // Split-by: categorical only makes sense
+  const splitSel = document.getElementById('seg-split-col');
+  splitSel.innerHTML = '';
+  data.categorical_columns
+    .filter(c => !skipHints.some(h => c.toLowerCase().includes(h)))
+    .forEach(c => { splitSel.innerHTML += `<option value="${c}">${c}</option>`; });
+
+  // Target: numeric only
+  const targetSel = document.getElementById('seg-target-col');
+  targetSel.innerHTML = '';
+  data.numeric_columns.forEach(c => { targetSel.innerHTML += `<option value="${c}">${c}</option>`; });
+  const priceHints = ['price','list_price','cost','value','sale'];
+  data.numeric_columns.forEach((c, i) => {
+    if (priceHints.some(h => c.toLowerCase().includes(h))) targetSel.selectedIndex = i;
+  });
+
+  // Features: all usable except obvious IDs
+  const list = document.getElementById('seg-feature-list');
+  list.innerHTML = '';
+  const nullRatesSeg = data.null_rates || {};
+  usable.forEach(col => {
+    const isNum    = data.numeric_columns.includes(col);
+    const nullRate = nullRatesSeg[col] || 0;
+    const nullPct  = Math.round(nullRate * 100);
+    const checked  = nullRate <= 0.4;
+    const badge = isNum
+      ? `<span style="font-size:10px;color:var(--accent);margin-left:4px">num</span>`
+      : `<span style="font-size:10px;color:var(--accent2);margin-left:4px">cat</span>`;
+    const nullBadge = nullPct > 0
+      ? `<span style="font-size:10px;margin-left:4px;color:${nullPct>40?'var(--danger)':nullPct>15?'var(--accent3)':'var(--text3)'}">${nullPct}% null</span>`
+      : '';
+    list.innerHTML += `<label class="check-item" style="${!checked?'opacity:0.5':''}"><input type="checkbox" value="${col}" ${checked?'checked':''}> ${col}${badge}${nullBadge}</label>`;
+  });
+}
+
+function trainSegments() {
+  const segCol    = document.getElementById('seg-split-col').value;
+  const targetCol = document.getElementById('seg-target-col').value;
+  const features  = [...document.querySelectorAll('#seg-feature-list input:checked')].map(c => c.value);
+  const modelType = document.getElementById('seg-model-type').value;
+
+  if (!features.length) { showToast('Select at least one feature', 'error'); return; }
+
+  const btn = document.getElementById('seg-train-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Training...';
+
+  fetch('/api/segment_train', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ segment_column: segCol, target_column: targetCol,
+                           feature_columns: features, model_type: modelType })
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false;
+    btn.textContent = 'Train Segment Models';
+    if (data.error) { showToast(data.error, 'error'); return; }
+    segmentData = data;
+    renderSegmentResults(data);
+    showToast(`Trained ${data.total_segments} segment models`, 'success');
+  })
+  .catch(() => { btn.disabled = false; btn.textContent = 'Train Segment Models'; showToast('Training error', 'error'); });
+}
+
+function renderSegmentResults(data) {
+  document.getElementById('seg-empty').style.display   = 'none';
+  document.getElementById('seg-results').style.display = 'block';
+
+  document.getElementById('seg-results-title').textContent =
+    `Models by "${data.segment_col}"`;
+  document.getElementById('seg-count-badge').textContent =
+    `${data.total_segments} segments`;
+
+  const fmt = v => '$' + Math.round(v).toLocaleString('en-CA');
+  // r2 can be null for segments with too few rows
+  const r2Fmt   = r2 => r2 === null || r2 === undefined ? 'n/a' : (r2 * 100).toFixed(1) + '%';
+  const r2Color = r2 => r2 === null ? 'var(--text3)' : r2 >= 0.7 ? 'var(--success)' : r2 >= 0.4 ? 'var(--accent3)' : 'var(--danger)';
+  const r2Label = r2 => r2 === null ? 'Too few rows' : r2 >= 0.7 ? 'Good' : r2 >= 0.4 ? 'Fair' : 'Poor';
+  const r2Badge = r2 => r2 === null ? '' : r2 >= 0.7 ? 'badge-pos' : r2 < 0.4 ? 'badge-neg' : '';
+  const r2Style = r2 => r2 !== null && r2 >= 0.4 && r2 < 0.7 ? 'background:rgba(240,168,74,.15);color:var(--accent3)' : '';
+
+  // ── Comparison table ──
+  const tbody = document.getElementById('seg-compare-body');
+  tbody.innerHTML = '';
+  Object.entries(data.segments).forEach(([seg, info]) => {
+    const r2 = info.r2;
+    tbody.innerHTML += `
+      <tr>
+        <td style="font-weight:600">${seg}</td>
+        <td style="font-family:var(--mono);font-size:12px;color:var(--text2)">${info.n_rows}</td>
+        <td style="font-family:var(--mono);font-size:12px">${fmt(info.mean_price)}</td>
+        <td><span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${r2Color(r2)}">${r2Fmt(r2)}</span></td>
+        <td style="font-family:var(--mono);font-size:12px;color:var(--text2)">${fmt(info.mae)}</td>
+        <td><span class="badge ${r2Badge(r2)}" style="${r2Style(r2)}">${r2Label(r2)}</span></td>
+      </tr>`;
+  });
+
+  // ── R² bar chart ──
+  const barsDiv = document.getElementById('seg-r2-bars');
+  barsDiv.innerHTML = Object.entries(data.segments).map(([seg, info]) => {
+    const r2  = info.r2;
+    const pct = r2 === null ? 0 : Math.max(0, r2 * 100);
+    const col = r2Color(r2);
+    return `
+      <div class="importance-bar" style="margin-bottom:10px">
+        <div class="importance-name" style="min-width:130px;color:var(--text)" title="${seg}">${seg}</div>
+        <div class="importance-track" style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${col};border-radius:4px;transition:width .6s ease"></div>
+        </div>
+        <div style="font-family:var(--mono);font-size:11px;color:${col};min-width:48px;text-align:right">${r2Fmt(r2)}</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);min-width:36px;text-align:right">${info.n_rows}r</div>
+      </div>`;
+  }).join('');
+
+  // ── Predict select ──
+  const sel = document.getElementById('seg-predict-select');
+  sel.innerHTML = '';
+  Object.keys(data.segments).forEach(seg => {
+    sel.innerHTML += `<option value="${seg}">${seg}</option>`;
+  });
+  onSegmentChange();
+}
+
+function onSegmentChange() {
+  if (!segmentData) return;
+  const seg  = document.getElementById('seg-predict-select').value;
+  const info = segmentData.segments[seg];
+  if (!info) return;
+
+  document.getElementById('seg-model-info').textContent =
+    `R² ${info.r2===null?'n/a':(info.r2*100).toFixed(1)+'%'}  ·  MAE $${Math.round(info.mae).toLocaleString('en-CA')}  ·  ${info.n_rows} rows`;
+
+  // Build predict form
+  const container = document.getElementById('seg-predict-inputs');
+  const html = info.feature_importance.map(f => {
+    const col = f.feature;
+    const ft  = info.feature_types[col];
+    const enc = info.encoders[col];
+    let inp;
+    if ((ft === 'categorical' || ft === 'target_encoded') && enc && enc.classes && enc.classes.length) {
+      const opts = enc.classes.map(c => `<option value="${c}">${c}</option>`).join('');
+      inp = `<select id="seg-input-${col}">${opts}</select>`;
+    } else {
+      const mean = enc ? Math.round(enc.mean || 0) : 0;
+      inp = `<input type="number" id="seg-input-${col}" placeholder="${mean}" value="${mean}">`;
+    }
+    return `<div class="predict-field"><label>${col}</label>${inp}</div>`;
+  }).join('');
+  container.innerHTML = html;
+
+  // reset result
+  document.getElementById('seg-prediction-result').classList.remove('show');
+}
+
+function runSegmentPrediction() {
+  if (!segmentData) { showToast('Train segment models first', 'error'); return; }
+  const seg  = document.getElementById('seg-predict-select').value;
+  const info = segmentData.segments[seg];
+  if (!info) return;
+
+  const values = {};
+  info.feature_importance.forEach(f => {
+    const el = document.getElementById(`seg-input-${f.feature}`);
+    if (el) values[f.feature] = el.value;
+  });
+
+  fetch('/api/segment_predict', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ segment_value: seg, values })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { showToast(data.error, 'error'); return; }
+    document.getElementById('seg-pred-label').textContent =
+      `Predicted ${data.target_col} — ${data.segment_col}: ${data.segment_value}`;
+    document.getElementById('seg-pred-value').textContent =
+      data.prediction.toLocaleString('en-CA');
+    document.getElementById('seg-pred-unit').textContent =
+      `Model R² ${data.model_r2===null?'n/a':(data.model_r2*100).toFixed(1)+'%'}  ·  MAE $${Math.round(data.model_mae).toLocaleString('en-CA')}`;
+    document.getElementById('seg-prediction-result').classList.add('show');
+  });
+}
+
+// =================== END SEGMENT MODELS ===================
+
+// =================== CITY FILTER ===================
+// Columns to show in the global filter bar (low-cardinality categoricals + city)
+const GLOBAL_FILTER_COLS = ['city','property_type','style','cooling_features','fireplace_features'];
+
+function setupCityFilter(data) {
+  const catCols = data.cat_filter_cols || {};
+  const bar     = document.getElementById('city-filter-bar');
+  if (!data.cities && !Object.keys(catCols).length) return;
+  bar.style.display = 'block';
+
+  const container = document.getElementById('global-filter-selects');
+  container.innerHTML = '';
+
+  // Build a <select> for each useful categorical column
+  // Priority order: city and district first, then others
+  const PRIORITY = ['city','district'];
+  const colsToShow = {};
+  PRIORITY.forEach(col => {
+    if (catCols[col]) colsToShow[col] = catCols[col];
+    else if (col === 'city' && data.cities && data.cities.length) colsToShow['city'] = data.cities;
+  });
+  Object.entries(catCols).forEach(([col, vals]) => {
+    if (!colsToShow[col]) colsToShow[col] = vals;
+  });
+
+  Object.entries(colsToShow).forEach(([col, vals]) => {
+    const label = col.replace(/_/g,' ');
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;gap:4px';
+
+    // Header row: label + all/none buttons
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between';
+    hdr.innerHTML = `
+      <span style="font-size:10px;color:var(--text2);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em">${label}</span>
+      <span style="display:flex;gap:6px">
+        <span onclick="gfCheckAll('gf-${col}',true)"  style="font-size:10px;color:var(--accent2);cursor:pointer">all</span>
+        <span onclick="gfCheckAll('gf-${col}',false)" style="font-size:10px;color:var(--text3);cursor:pointer">none</span>
+      </span>`;
+
+    // Checkbox list
+    const list = document.createElement('div');
+    list.id = `gf-${col}`;
+    list.className = 'checkbox-list';
+    list.style.cssText = 'max-height:120px;background:var(--bg);border-radius:6px;padding:4px';
+    vals.forEach(v => {
+      list.innerHTML += `<label class="check-item" style="font-size:12px"><input type="checkbox" value="${v}" checked> ${v}</label>`;
+    });
+
+    wrap.appendChild(hdr);
+    wrap.appendChild(list);
+    container.appendChild(wrap);
+  });
+
+  document.getElementById('city-filter-count').textContent = '';
+
+  // Restore saved global filter if any
+  setTimeout(loadGlobalFilter, 50);
+
+  // Sync uv city checkbox list
+  const uvList = document.getElementById('uv-city-list');
+  if (uvList && data.cities) {
+    uvList.innerHTML = '';
+    data.cities.forEach(c => {
+      uvList.innerHTML += `<label class="check-item"><input type="checkbox" value="${c}" checked> ${c}</label>`;
+    });
+  }
+}
+
+function uvCityCheckAll(state) {
+  document.querySelectorAll('#uv-city-list input').forEach(cb => cb.checked = state);
+}
+
+function gfCheckAll(listId, state) {
+  document.querySelectorAll(`#${listId} input`).forEach(cb => cb.checked = state);
+}
+
+function getGlobalFilters() {
+  const filters = {};
+  // Each filter group is a checkbox list with id="gf-{col}"
+  document.querySelectorAll('#global-filter-selects .checkbox-list').forEach(list => {
+    const col      = list.id.replace(/^gf-/, '');
+    const all      = list.querySelectorAll('input');
+    const checked  = [...all].filter(cb => cb.checked).map(cb => cb.value);
+    // Only apply filter if not everything is checked (selecting all = no filter)
+    if (checked.length > 0 && checked.length < all.length) {
+      filters[col] = checked;   // send as array
+    }
+  });
+  return filters;
+}
+
+function toggleFilterPanel() {
+  const panel = document.getElementById('filter-panel');
+  if (panel.style.display === 'none') {
+    const btn  = document.getElementById('filter-toggle-btn');
+    const rect = btn.getBoundingClientRect();
+    panel.style.top  = (rect.bottom + 6) + 'px';
+    panel.style.left = rect.left + 'px';
+    panel.style.display = 'block';
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+// Close panel when clicking outside
+document.addEventListener('click', e => {
+  const bar = document.getElementById('city-filter-bar');
+  const panel = document.getElementById('filter-panel');
+  if (panel && !bar?.contains(e.target)) panel.style.display = 'none';
+});
+
+function resetAllFilters() {
+  document.querySelectorAll('#global-filter-selects .checkbox-list input').forEach(cb => cb.checked = true);
+  applyGlobalFilters();
+}
+
+function applyGlobalFilters() {
+  const filters = getGlobalFilters();
+  // Build query string for display
+  const parts = Object.entries(filters).map(([k,v]) => `${k}: ${v}`);
+  // Apply via /api/set_global_filter
+  fetch('/api/set_global_filter', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ filters })
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.error) { showToast(d.error, 'error'); return; }
+    const rowLabel = parts.length
+      ? `${parts.join(' · ')} — ${d.rows} rows`
+      : `All data — ${d.rows} rows`;
+    document.getElementById('city-filter-count').textContent = rowLabel;
+    const rowCountEl = document.getElementById('filter-row-count');
+    if (rowCountEl) rowCountEl.textContent = `${d.rows} rows`;
+    setStatus(true, `${d.rows} rows`);
+    // Badge + reset button
+    const badge    = document.getElementById('filter-active-count');
+    const resetBtn = document.getElementById('filter-reset-btn');
+    if (badge)    { badge.textContent = parts.length; badge.style.display = parts.length ? 'inline' : 'none'; }
+    if (resetBtn) { resetBtn.style.display = parts.length ? 'inline-block' : 'none'; }
+    if (parts.length) showToast(`Filter: ${d.rows} rows. Retrain model.`, 'success');
+    saveGlobalFilter();
+  });
+}
+
+// applyCityFilter is now applyGlobalFilters
+
+// =================== CATEGORY FILTERS ===================
+function setupCatFilters(data) {
+  const cols = data.cat_filter_cols || {};
+  const container = document.getElementById('uv-cat-filters');
+  if (!container) return;
+  if (!Object.keys(cols).length) { container.innerHTML = '<div style="font-size:12px;color:var(--text3)">No filterable columns found</div>'; return; }
+
+  let html = '';
+  for (const [col, vals] of Object.entries(cols)) {
+    const label = col.replace(/_/g, ' ');
+    html += `<div style="margin-bottom:14px">
+      <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;display:flex;justify-content:space-between">
+        ${label}
+        <span style="cursor:pointer;color:var(--accent2)" onclick="catFilterCheckAll('cat-filter-${col}',true)">all</span>
+      </div>
+      <div class="checkbox-list" id="cat-filter-${col}" style="max-height:120px">`;
+    vals.forEach(v => {
+      html += `<label class="check-item" style="font-size:12px"><input type="checkbox" value="${v}" checked> ${v}</label>`;
+    });
+    html += `</div></div>`;
+  }
+  container.innerHTML = html;
+  container.style.display = 'block';
+
+  // Store col names for later
+  container.dataset.cols = JSON.stringify(Object.keys(cols));
+}
+
+function catFilterCheckAll(listId, state) {
+  document.querySelectorAll(`#${listId} input`).forEach(cb => cb.checked = state);
+}
+
+function getCatFilters() {
+  const container = document.getElementById('uv-cat-filters');
+  if (!container) return {};
+  const cols = JSON.parse(container.dataset.cols || '[]');
+  const result = {};
+  cols.forEach(col => {
+    const checked = [...document.querySelectorAll(`#cat-filter-${col} input:checked`)].map(c => c.value);
+    const total   = document.querySelectorAll(`#cat-filter-${col} input`).length;
+    // Only send filter if not all are selected (no-op to send all)
+    if (checked.length < total) result[col] = checked;
+  });
+  return result;
+}
+
+// =================== UNDERVALUED ===================
+function setupUndervaluedUI(data) {
+  // cities already set in setupCityFilter
+}
+
+function showUndervaluedControls() {
+  document.getElementById('uv-upload-msg').style.display = 'none';
+  document.getElementById('uv-controls').style.display   = 'block';
+
+  // Populate type checkboxes from appData
+  if (!appData) return;
+  const typeList = document.getElementById('uv-type-list');
+  typeList.innerHTML = '';
+  // Get types from categorical columns — find 'type' column values from preview
+  const types = [...new Set(
+    (appData.preview || []).map(r => r.property_type || r.type).filter(Boolean)
+  )];
+  // If preview doesn't have enough types, show a generic checkbox
+  const allTypes = appData._property_types || [];
+  const renderTypes = allTypes.length ? allTypes : types;
+  if (!renderTypes.length) {
+    typeList.innerHTML = '<div style="font-size:12px;color:var(--text3)">Types will appear after training</div>';
+    return;
+  }
+  renderTypes.forEach(t => {
+    const isLot = t.toLowerCase().includes('lot') || t.toLowerCase().includes('land') ||
+                  t.toLowerCase().includes('recreational');
+    typeList.innerHTML += `<label class="check-item"><input type="checkbox" value="${t}" ${isLot ? '' : 'checked'}> ${t}</label>`;
+  });
+}
+
+function runUndervalued() {
+  const cityCheckboxes = document.querySelectorAll('#uv-city-list input:checked');
+  const cityFilter = cityCheckboxes.length
+    ? [...cityCheckboxes].map(c => c.value)
+    : [];
+  const minPct  = parseFloat(document.getElementById('uv-min-pct').value);
+  const topN    = parseInt(document.getElementById('uv-top-n').value);
+
+  const btn = document.querySelector('#page-undervalued .btn-primary');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Scanning...';
+
+  const typeCheckboxes = document.querySelectorAll('#uv-type-list input:checked');
+  const typeFilter = typeCheckboxes.length
+    ? [...typeCheckboxes].map(c => c.value)
+    : [];
+
+  const minConf  = document.getElementById('uv-confidence').value;
+  const minBeds  = document.getElementById('uv-min-beds').value  || null;
+  const minBaths = document.getElementById('uv-min-baths').value || null;
+  fetch('/api/undervalued', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ city_filter: cityFilter.length ? cityFilter : null, min_underval_pct: minPct, top_n: topN,
+                           type_filter: typeFilter, require_sqft: true, min_confidence: minConf,
+                           min_beds: minBeds ? parseFloat(minBeds) : null,
+                           min_baths: minBaths ? parseFloat(minBaths) : null,
+                           cat_filters: getCatFilters() })
+  })
+  .then(r => r.json())
+  .then(data => {
+    btn.disabled = false;
+    btn.textContent = 'Find Undervalued';
+    if (data.error) { showToast(data.error, 'error'); return; }
+    renderUndervalued(data);
+    showToast(`Found ${data.total_found} undervalued listings`, 'success');
+  })
+  .catch(() => { btn.disabled = false; btn.textContent = 'Find Undervalued'; showToast('Error', 'error'); });
+}
+
+function uvSort(col) {
+  if (!uvData) return;
+  if (uvSortCol === col) uvSortDir *= -1;
+  else { uvSortCol = col; uvSortDir = col === 'city' ? 1 : -1; }
+  // Update header indicators
+  document.querySelectorAll('.uv-sortable').forEach(th => {
+    const base = th.textContent.replace(/ [↑↓↕]$/, '');
+    const icon = th.dataset.col === uvSortCol ? (uvSortDir === -1 ? ' ↓' : ' ↑') : ' ↕';
+    th.textContent = base + icon;
+  });
+  uvData.listings.sort((a, b) => {
+    const va = a[col] ?? (typeof a[col] === 'string' ? '' : 0);
+    const vb = b[col] ?? (typeof b[col] === 'string' ? '' : 0);
+    if (typeof va === 'string') return uvSortDir * va.localeCompare(vb);
+    return uvSortDir * (va - vb);
+  });
+  renderUvTable(uvData.listings);
+}
+
+function renderUndervalued(data) {
+  uvData = data;
+  uvSortCol = 'gap_pct'; uvSortDir = -1;
+  document.getElementById('uv-empty').style.display   = 'none';
+  document.getElementById('uv-results').style.display = 'block';
+  document.getElementById('uv-count-badge').textContent = `${data.total_found} found`;
+
+  // Stats
+  const listings = data.listings;
+  const fmtS = v => '$' + Math.round(v).toLocaleString('en-CA');
+  if (listings.length) {
+    const avgGapPct = listings.reduce((s,r) => s + r.gap_pct, 0) / listings.length;
+    const maxGapPct = Math.max(...listings.map(r => r.gap_pct));
+    const totalGap  = listings.reduce((s,r) => s + r.gap, 0);
+    document.getElementById('uv-stats-grid').innerHTML = `
+      <div class="stat-card"><div class="stat-val" style="font-size:22px;color:var(--success)">${listings.length}</div><div class="stat-label">Listings found</div></div>
+      <div class="stat-card"><div class="stat-val" style="font-size:22px;color:var(--accent)">${avgGapPct.toFixed(1)}%</div><div class="stat-label">Avg undervaluation</div></div>
+      <div class="stat-card"><div class="stat-val" style="font-size:22px;color:var(--accent)">${maxGapPct.toFixed(1)}%</div><div class="stat-label">Max undervaluation</div></div>
+      <div class="stat-card"><div class="stat-val" style="font-size:22px;color:var(--accent2)">${fmtS(totalGap/listings.length)}</div><div class="stat-label">Avg gap $</div></div>`;
+  }
+
+  // Table
+  renderUvTable(data.listings);
+}
+
+function renderUvTable(listings) {
+  const fmt  = v => '$' + Math.round(v).toLocaleString('en-CA');
+  const tbody = document.getElementById('uv-tbody');
+  tbody.innerHTML = '';
+  listings.forEach(r => {
+    const barW  = Math.min(100, r.gap_pct * 2);
+    const color = r.gap_pct >= 20 ? 'var(--success)' : r.gap_pct >= 10 ? 'var(--accent)' : 'var(--accent3)';
+    const addr  = r.street || '—';
+    const type  = (r.property_type || r.type || '').replace(' for sale','');
+    const loc      = [r.city, r.district].filter(Boolean).join(' / ') || '—';
+    const url      = r.summary_url || r.virtual_tour || '';
+    const addrCell = url ? `<a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none;font-size:12px">${addr} 🔗</a>` : `<span style="font-size:12px">${addr}</span>`;
+    const confColor = {'high':'var(--success)','medium':'var(--accent3)','low':'var(--danger)'}[r.confidence] || 'var(--text3)';
+    const confLabel = {'high':'High','medium':'Medium','low':'Low'}[r.confidence] || '?';
+    const nComp = r.n_district || r.n_city || 0;
+    tbody.innerHTML += `
+      <tr>
+        <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${addrCell}</td>
+        <td style="font-size:11px;color:var(--text2)">${type}</td>
+        <td style="font-size:11px;color:var(--text2)">${loc}</td>
+        <td style="font-family:var(--mono);font-size:12px;white-space:nowrap">${r.bedrooms ?? '—'}bd / ${r.bathrooms ?? '—'}ba${r.floor_area_sqft ? ' · ' + Math.round(r.floor_area_sqft) + ' sqft' : ''}</td>
+        <td style="font-family:var(--mono);font-size:12px">${fmt(r.actual)}</td>
+        <td style="font-family:var(--mono);font-size:12px;color:var(--text2)">${fmt(r.predicted)}</td>
+        <td style="font-family:var(--mono);font-size:12px;color:${color};font-weight:600">${fmt(r.gap)}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;height:6px;background:var(--border);border-radius:3px;min-width:60px">
+              <div style="height:100%;width:${barW}%;background:${color};border-radius:3px;transition:width .5s ease"></div>
+            </div>
+            <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${color};min-width:42px">+${r.gap_pct}%</span>
+          </div>
+        </td>
+        <td>
+          <span style="font-size:11px;font-weight:600;color:${confColor}">${confLabel}</span>
+          <div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:3px">${nComp} comps</div>
+          <button onclick="toggleComps(this,${listings.indexOf(r)})"
+                  style="padding:2px 8px;background:transparent;border:1px solid var(--border2);border-radius:5px;color:var(--text3);cursor:pointer;font-size:10px;font-family:var(--sans)">
+            view comps
+          </button>
+        </td>
+
+      </tr>
+      <tr class="uv-similar-row" style="display:none">
+        <td colspan="10" style="padding:0;background:var(--bg)">
+          <div class="uv-similar-panel" style="padding:12px 16px">
+            <div style="font-size:11px;color:var(--text3)">Loading...</div>
+          </div>
+        </td>
+      </tr>
+      <tr class="uv-comps-row" style="display:none">
+        <td colspan="10" style="padding:0;background:var(--surface)">
+          <div class="uv-comps-panel" style="padding:12px 16px">
+            <div style="font-size:11px;color:var(--text3)">Loading comps...</div>
+          </div>
+        </td>
+      </tr>`;
+  });
+}
+
+function toggleComps(btn, idx) {
+  const listing  = uvData && uvData.listings ? uvData.listings[idx] : null;
+  if (!listing) return;
+  const district = listing.district || '';
+  const city     = listing.city     || '';
+  const tr       = btn.closest('tr');
+  const simRow   = tr.nextElementSibling;
+  const compsRow = simRow ? simRow.nextElementSibling : null;
+  if (!compsRow || !compsRow.classList.contains('uv-comps-row')) return;
+  const panel  = compsRow.querySelector('.uv-comps-panel');
+  const isOpen = compsRow.style.display !== 'none';
+  document.querySelectorAll('.uv-comps-row').forEach(r => r.style.display = 'none');
+  document.querySelectorAll('button[onclick*="toggleComps"]').forEach(b => { if (b !== btn) b.textContent = 'view comps'; });
+  if (isOpen) { btn.textContent = 'view comps'; return; }
+  compsRow.style.display = 'table-row';
+  btn.textContent = 'hide comps';
+  panel.innerHTML = '<span class="spinner"></span> Loading...';
+  fetch('/api/comps', { method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      district,
+      city,
+      street:          listing.street         || '',
+      floor_area_sqft: listing.floor_area_sqft || 0,
+      bedrooms:        listing.bedrooms        || '',
+      property_type:   listing.property_type   || '',
+      actual_price:    listing.actual          || 0
+    }) })
+  .then(r => r.json())
+  .then(data => { if (data.error) { panel.innerHTML = '<div style="color:var(--danger)">'+data.error+'</div>'; return; } renderComps(panel, data); });
+}
+
+function renderComps(panel, data) {
+  const fmt = v => '$' + Math.round(v).toLocaleString('en-CA');
+  const target = data.target_col;
+  if (!data.comps || !data.comps.length) { panel.innerHTML = '<div style="font-size:11px;color:var(--text3)">No comparable listings found in this district.</div>'; return; }
+  const prices = data.comps.map(c => c[target]).filter(Boolean).sort((a,b) => a-b);
+  const median = prices.length ? fmt(prices[Math.floor(prices.length/2)]) : '?';
+  const minP   = prices.length ? fmt(prices[0]) : '?';
+  const maxP   = prices.length ? fmt(prices[prices.length-1]) : '?';
+  const rows = data.comps.map(r => {
+    const url  = r.summary_url || '';
+    const addr = r.street || '?';
+    const cell = url ? '<a href="'+url+'" target="_blank" style="color:var(--accent);text-decoration:none">'+addr+' 🔗</a>' : addr;
+    const type = (r.property_type||'').replace(' for sale','');
+    const beds  = r.bedrooms   ? parseFloat(r.bedrooms).toFixed(0)+'bd'  : '';
+    const baths = r.bathrooms  ? parseFloat(r.bathrooms).toFixed(0)+'ba' : '';
+    const sqft  = r.floor_area_sqft ? Math.round(parseFloat(r.floor_area_sqft))+'sqft' : '';
+    const yr    = r.year_built && r.year_built !== 'nan' ? r.year_built : '';
+    const specs = [beds,baths,sqft,yr].filter(Boolean).join(' / ');
+    const price = r[target] ? fmt(r[target]) : '—';
+    return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 10px;font-size:12px;max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+cell+'</td><td style="padding:5px 10px;font-size:11px;color:var(--text2)">'+type+'</td><td style="padding:5px 10px;font-family:var(--mono);font-size:11px;color:var(--text2)">'+specs+'</td><td style="padding:5px 10px;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent)">'+price+'</td></tr>';
+  }).join('');
+  panel.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:12px;font-weight:600;color:var(--text2)">'+data.n+' comps in <span style="color:var(--accent)">'+( data.district||data.city)+'</span></span><span style="font-size:11px;font-family:var(--mono);color:var(--text3)">range: '+minP+' — '+maxP+'&nbsp;&nbsp;median: <span style="color:var(--text)">'+median+'</span></span></div><table style="width:100%;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--border2)"><th style="padding:3px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Address</th><th style="padding:3px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Type</th><th style="padding:3px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Specs</th><th style="padding:3px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Price</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+
+function toggleUvSimilar(btn, listing) {
+  const row     = btn.closest('tr');
+  const simRow  = row.nextElementSibling;
+  const panel   = simRow.querySelector('.uv-similar-panel');
+  const isOpen  = simRow.style.display !== 'none';
+
+  // Close all other open rows first
+  document.querySelectorAll('.uv-similar-row').forEach(r => r.style.display = 'none');
+  document.querySelectorAll('.uv-similar-row + tr button, tr:has(+ .uv-similar-row) button').forEach(b => {
+    if (b !== btn) b.textContent = 'Similar';
+  });
+
+  if (isOpen) {
+    btn.textContent = 'Similar';
+    return;
+  }
+
+  simRow.style.display = 'table-row';
+  btn.textContent = 'Close';
+  panel.innerHTML = '<div style="font-size:11px;color:var(--text3)"><span class="spinner"></span> Loading similar...</div>';
+
+  // Build values from the listing itself — use all available fields
+  // regardless of whether a model is trained, so Similar always works
+  const SIMILAR_FIELDS = ['floor_area_sqft','bedrooms','bathrooms','property_type',
+                           'city','district','rooms','parking_spaces','year_built'];
+  const values = {};
+  SIMILAR_FIELDS.forEach(col => {
+    if (listing[col] !== undefined && listing[col] !== '' && listing[col] !== 'nan') {
+      values[col] = listing[col];
+    }
+  });
+  // Also include any model features not in the above list
+  if (modelData) {
+    modelData.feature_importance.forEach(f => {
+      const col = f.feature;
+      if (!(col in values) && listing[col] !== undefined && listing[col] !== '') {
+        values[col] = listing[col];
+      }
+    });
+  }
+
+  fetch('/api/similar_listings', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ values, top_n: 5 })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error || !data.similar) {
+      panel.innerHTML = '<div style="font-size:11px;color:var(--danger)">Could not load similar listings</div>';
+      return;
+    }
+    renderUvSimilar(panel, data, listing);
+  });
+}
+
+function renderUvSimilar(panel, data, queryListing) {
+  const fmt    = v => '$' + Math.round(v).toLocaleString('en-CA');
+  const target = data.target_col;
+
+  const rows = data.similar.map(r => {
+    const addr  = r.street || '—';
+    const type  = (r.property_type || '').replace(' for sale','');
+    const loc   = [r.city, r.district].filter(Boolean).join(' / ') || '—';
+    const beds  = r.bedrooms  ? `${parseFloat(r.bedrooms).toFixed(0)}bd`  : '';
+    const baths = r.bathrooms ? `${parseFloat(r.bathrooms).toFixed(0)}ba` : '';
+    const sqft  = r.floor_area_sqft ? `${Math.round(parseFloat(r.floor_area_sqft))}sqft` : '';
+    const specs = [beds, baths, sqft].filter(Boolean).join(' / ');
+    const price = r[target] ? fmt(r[target]) : '—';
+    const url   = r.summary_url || '';
+    const addrCell = url
+      ? `<a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none">${addr} 🔗</a>`
+      : addr;
+    const sim   = Math.max(0, Math.round(Math.exp(-r.distance * 2) * 100));
+    const sCol  = sim >= 80 ? 'var(--success)' : sim >= 60 ? 'var(--accent)' : 'var(--text2)';
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 10px;font-size:12px;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${addrCell}</td>
+      <td style="padding:6px 10px;font-size:11px;color:var(--text2)">${type}</td>
+      <td style="padding:6px 10px;font-size:11px;color:var(--text2)">${loc}</td>
+      <td style="padding:6px 10px;font-family:var(--mono);font-size:11px;color:var(--text2)">${specs}</td>
+      <td style="padding:6px 10px;font-family:var(--mono);font-size:12px;font-weight:600">${price}</td>
+      <td style="padding:6px 10px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="width:50px;height:4px;background:var(--border);border-radius:2px">
+            <div style="height:100%;width:${sim}%;background:${sCol};border-radius:2px"></div>
+          </div>
+          <span style="font-family:var(--mono);font-size:11px;color:${sCol}">${sim}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:600">
+      Similar to: ${queryListing.street || 'this listing'}
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="border-bottom:1px solid var(--border2)">
+        <th style="padding:4px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Address</th>
+        <th style="padding:4px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Type</th>
+        <th style="padding:4px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Location</th>
+        <th style="padding:4px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Specs</th>
+        <th style="padding:4px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Price</th>
+        <th style="padding:4px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Match</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// =================== END UNDERVALUED ===================
+// =================== SAVED MODELS ===================
+let _savedModels = [];
+
+async function loadSavedModelsList() {
+  try {
+    const r = await fetch('/api/models');
+    const d = await r.json();
+    _savedModels = d.models || [];
+    renderSavedModelsList();
+  } catch(e) {}
+}
+
+function renderSavedModelsList() {
+  const count = document.getElementById('saved-models-count');
+  const list  = document.getElementById('saved-models-list');
+  if (!count) return;
+  count.textContent = _savedModels.length;
+  if (!_savedModels.length) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 4px">No saved models yet. Train a model and click the 💾 button.</div>';
+    return;
+  }
+  const fmtR2  = v => v != null ? (v*100).toFixed(1)+'%' : '?';
+  const fmtMAE = v => v != null ? '$'+Math.round(v).toLocaleString('en-CA') : '?';
+  const rows = _savedModels.map((m, i) => {
+    const feats    = (m.feature_cols||[]).slice(0,5).join(', ') + (m.feature_cols.length > 5 ? '...' : '');
+    const filt     = Object.entries(m.filters||{}).map(([k,v]) => Array.isArray(v) ? v.join(',') : v).join(' · ') || 'all data';
+    const modelIco = m.model_type==='random_forest' ? '🌲' : m.model_type==='gradient_boosting' ? '🚀' : '📈';
+    const div = document.createElement('div');
+    div.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px';
+    div.innerHTML =
+      '<div style="display:flex;align-items:flex-start;gap:8px">'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + m.name + '</div>'
+      + '<div style="font-size:11px;color:var(--accent2);margin-bottom:2px">' + modelIco + ' ' + (m.model_type||'').replace('_',' ') + ' &nbsp;&middot;&nbsp; ' + filt + ' &nbsp;&middot;&nbsp; ' + (m.n_rows||0) + ' rows</div>'
+      + '<div style="font-size:11px;color:var(--text3);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + feats + '</div>'
+      + '<div style="display:flex;gap:12px">'
+      + '<span style="font-size:12px;font-family:var(--mono);color:var(--success)">R2 ' + fmtR2(m.r2_cv) + '</span>'
+      + '<span style="font-size:12px;font-family:var(--mono);color:var(--accent)">MAE ' + fmtMAE(m.mae_cv) + '</span>'
+      + '<span style="font-size:10px;color:var(--text3)">' + (m.created||'') + '</span>'
+      + '</div></div>'
+      + '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'
+      + '<button data-idx="'+i+'" data-action="load" style="padding:4px 10px;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600">Load</button>'
+      + '<button data-idx="'+i+'" data-action="rename" style="padding:4px 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;cursor:pointer;font-size:11px">Rename</button>'
+      + '<button data-idx="'+i+'" data-action="delete" style="padding:4px 10px;background:transparent;border:1px solid var(--danger);border-radius:5px;cursor:pointer;font-size:11px;color:var(--danger)">Delete</button>'
+      + '</div></div>';
+    div.querySelectorAll('button[data-action]').forEach(btn => {
+      btn.addEventListener('click', () => _savedModelAction(+btn.dataset.idx, btn.dataset.action));
+    });
+    return div;
+  });
+  list.innerHTML = '';
+  rows.forEach(r => list.appendChild(r));
+}
+
+function toggleSavedModels() {
+  const list = document.getElementById('saved-models-list');
+  const icon = document.getElementById('saved-models-toggle');
+  const open = list.style.display === 'none';
+  list.style.display = open ? 'block' : 'none';
+  icon.innerHTML = open ? '&#9660;' : '&#9654;';
+  if (open) loadSavedModelsList();
+}
+
+async function saveCurrentModel() {
+  const defName = (document.getElementById('model-type')?.value||'').replace('_',' ')+' '+new Date().toLocaleDateString('en-CA');
+  const name = prompt('Model name:', defName);
+  if (name === null) return;
+  const r = await fetch('/api/models/save', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name: name||'Untitled' })
+  });
+  const d = await r.json();
+  if (d.error) { showToast(d.error,'error'); return; }
+  showToast('Saved: '+d.name, 'success');
+  loadSavedModelsList();
+  const list = document.getElementById('saved-models-list');
+  if (list.style.display === 'none') toggleSavedModels();
+}
+
+async function loadSavedModel(modelId) {
+  const r = await fetch('/api/models/load', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ id: modelId })
+  });
+  const d = await r.json();
+  if (d.error) { showToast(d.error,'error'); return; }
+  // Show results
+  document.getElementById('pred-results').style.display = 'block';
+  document.getElementById('model-config-summary').style.display = 'block';
+  document.getElementById('save-model-btn').disabled = false;
+  const filt = Object.entries(d.filters||{}).map(([k,v])=>Array.isArray(v)?k+': '+v.join(', '):k+': '+v);
+  document.getElementById('model-filter-info').textContent = filt.length ? filt.join('  -  ')+' ('+(d.n_rows||0)+' rows)' : 'All data ('+(d.n_rows||0)+' rows)';
+  document.getElementById('model-features-info').innerHTML = (d.feature_cols||[]).map(f =>
+    '<span style="display:inline-block;padding:2px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;font-size:11px;color:var(--text2)">'+f+'</span>'
+  ).join('');
+  const mn = {random_forest:'Random Forest',gradient_boosting:'Gradient Boosting',linear:'Linear Regression'};
+  document.getElementById('model-type-badge').textContent = mn[d.model_type]||d.model_type;
+  const r2cv = d.r2_cv||0;
+  document.getElementById('r2-cv-val').textContent = (r2cv*100).toFixed(1)+'%';
+  document.getElementById('r2-cv-val').style.color = r2cv>0.7?'var(--success)':r2cv>0.4?'var(--accent3)':'var(--danger)';
+  document.getElementById('mae-cv-val').textContent = d.mae_cv ? '$'+Math.round(d.mae_cv).toLocaleString('en-CA') : '-';
+  document.getElementById('r2-val').textContent = d.r2_score ? (d.r2_score*100).toFixed(1)+'%' : '-';
+  document.getElementById('mae-val').textContent = '-';
+  // Apply features to checkboxes
+  const fs = new Set(d.feature_cols||[]);
+  document.querySelectorAll('#pred-feature-list input').forEach(cb => {
+    cb.checked = fs.has(cb.value);
+    cb.closest('label').style.opacity = cb.checked ? '1' : '0.4';
+  });
+  if (d.model_type) document.getElementById('model-type').value = d.model_type;
+  showToast('Loaded: '+d.name, 'success');
+}
+
+async function deleteSavedModel(modelId) {
+  if (!confirm('Delete this model?')) return;
+  await fetch('/api/models/delete', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:modelId})});
+  loadSavedModelsList();
+  showToast('Model deleted','success');
+}
+
+async function startRenameModel(modelId) {
+  const cur = _savedModels.find(m=>m.id===modelId);
+  const newName = prompt('New name:', cur?.name||'');
+  if (!newName || newName===cur?.name) return;
+  await fetch('/api/models/rename', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:modelId,name:newName})});
+  loadSavedModelsList();
+}
+function _savedModelAction(idx, action) {
+  const m = _savedModels[idx];
+  if (!m) return;
+  if (action === 'load')   loadSavedModel(m.id);
+  if (action === 'rename') startRenameModel(m.id);
+  if (action === 'delete') deleteSavedModel(m.id);
+}
+// =================== END SAVED MODELS ===================
+
+
+// =================== MODEL TUNING ===================
+let _tuneJobId = null;
+
+function setupTuningUI(data) {
+  document.getElementById('tune-upload-msg').style.display = 'none';
+  document.getElementById('tune-controls').style.display = 'block';
+  const tsel = document.getElementById('tune-target');
+  tsel.innerHTML = '';
+  data.numeric_columns.forEach(col => { tsel.innerHTML += '<option value="'+col+'">'+col+'</option>'; });
+  const ph = ['price','list_price','cost','value'];
+  data.numeric_columns.forEach((col,i) => { if (ph.some(h => col.toLowerCase().includes(h))) tsel.selectedIndex = i; });
+  const list = document.getElementById('tune-feature-list');
+  const nullR = data.null_rates || {};
+  list.innerHTML = '';
+  const skip = ['url','link','mls','street','summary','virtual','photo'];
+  [...data.numeric_columns, ...data.categorical_columns]
+    .filter(c => !skip.some(s => c.toLowerCase().includes(s)))
+    .forEach(col => {
+      const nr = nullR[col] || 0;
+      const ok = nr <= 0.4;
+      const pct = Math.round(nr * 100);
+      const nb = pct > 0 ? '<span style="font-size:10px;color:'+(pct>40?'var(--danger)':'var(--text3)')+';margin-left:4px">'+pct+'% null</span>' : '';
+      list.innerHTML += '<label class="check-item" style="'+(ok?'':'opacity:0.5')+'"><input type="checkbox" value="'+col+'" '+(ok?'checked':'')+' onchange="updateTuneEstimate()">'+col+nb+'</label>';
+    });
+  setTimeout(updateTuneEstimate, 100);
+}
+function tuneCheckAll(state) {
+  document.querySelectorAll('#tune-feature-list input').forEach(cb => cb.checked = state);
+}
+function runTuning() {
+  const target = document.getElementById('tune-target').value;
+  const features = [...document.querySelectorAll('#tune-feature-list input:checked')].map(c => c.value);
+  if (features.length < 2) { showToast('Select at least 2 features', 'error'); return; }
+  document.getElementById('tune-empty').style.display = 'none';
+  document.getElementById('tune-results').style.display = 'none';
+  document.getElementById('tune-progress-panel').style.display = 'block';
+  document.getElementById('tune-run-btn').disabled = true;
+  document.getElementById('tune-run-btn').innerHTML = '<span class="spinner"></span> Running...';
+  document.getElementById('tune-progress-bar').style.width = '0%';
+  document.getElementById('tune-live-results').innerHTML = '';
+  const _taf = (typeof getGlobalFilters==='function') ? getGlobalFilters() : {};
+  const _tafParts = Object.entries(_taf).map(([k,v]) => Array.isArray(v) ? k+': '+v.join(', ') : k+': '+v);
+  document.getElementById('tune-progress-text').textContent = _tafParts.length ? 'Filter: '+_tafParts.join(' - ') : 'No filter — all data';
+  const wp = getWorkerParams();
+  fetch('/api/tune', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      target_column: target, feature_columns: features,
+      min_features: parseInt(document.getElementById('tune-min-features').value) || 1,
+      max_features: parseInt(document.getElementById('tune-max-features').value) || 4,
+      top_n: parseInt(document.getElementById('tune-top-n').value) || 100,
+      use_log_target: document.getElementById('tune-log').checked,
+      remove_outliers: document.getElementById('tune-outliers').checked,
+      worker_id: wp.worker_id, n_workers: wp.n_workers, n_jobs: wp.n_jobs,
+    })
+  }).then(r=>r.json()).then(d => {
+    if (d.error) { showToast(d.error,'error'); resetTuneBtn(); return; }
+    _tuneJobId = d.job_id;
+    window._currentTuneJobId = d.job_id;  // for merge
+    document.getElementById('tune-progress-badge').textContent = '0 / ' + d.total + ' tests';
+    document.getElementById('tune-stop-btn').style.display = 'block';
+    // Show job ID for copy-paste to other machines
+    const wid = document.getElementById('tune-worker-id').value;
+    const nw  = document.getElementById('tune-n-workers').value;
+    if (parseInt(nw) > 1) showToast('Worker '+( parseInt(wid)+1)+'/'+nw+' job: '+d.job_id, 'success');
+    pollTuning();
+  });
+}
+function pollTuning() {
+  if (!_tuneJobId) return;
+  fetch('/api/tune_status?job_id='+_tuneJobId)
+  .then(r=>r.json()).then(d => {
+    const pct = d.total > 0 ? Math.round(d.progress/d.total*100) : 0;
+    document.getElementById('tune-progress-bar').style.width = pct+'%';
+    document.getElementById('tune-progress-badge').textContent = d.progress+' / '+d.total+' tests';
+    const phase = d.phase || '';
+    document.getElementById('tune-progress-text').textContent = (phase ? phase + '  —  ' : '') + d.progress+' tests done, '+d.results.length+' valid results';
+    if (d.results.length) renderTuneLive(d.results);
+    if (d.status === 'done' || d.status === 'stopped') {
+      document.getElementById('tune-progress-panel').style.display = 'none';
+      if (d.results && d.results.length) renderTuneResults(d.results);
+      resetTuneBtn();
+      if (d.status === 'done') showToast('Done! Best R2 = ' + (d.results[0]?.r2 || '?') + '%', 'success');
+    } else if (d.status === 'error') {
+      resetTuneBtn();
+    } else {
+      setTimeout(pollTuning, 1200);
+    }
+  });
+}
+function stopTuning() {
+  if (!_tuneJobId) return;
+  const jid = _tuneJobId;
+  _tuneJobId = null;
+  fetch('/api/tune_stop?job_id=' + jid, { method: 'POST' }).then(() => {
+    // Show results collected so far
+    fetch('/api/tune_status?job_id=' + jid).then(r => r.json()).then(d => {
+      document.getElementById('tune-progress-panel').style.display = 'none';
+      if (d.results && d.results.length) renderTuneResults(d.results);
+    });
+  });
+  resetTuneBtn();
+  showToast('Tuning stopped — showing partial results', 'success');
+}
+
+function resetTuneBtn() {
+  const btn = document.getElementById('tune-run-btn');
+  btn.disabled = false; btn.textContent = 'Find Best Model';
+  document.getElementById('tune-stop-btn').style.display = 'none';
+}
+function r2Color(v) { return v>=70?'var(--success)':v>=50?'var(--accent)':v>=30?'var(--accent3)':'var(--danger)'; }
+function modelIcon(m) { return m.includes('Forest')?'🌲':m.includes('Boost')?'🚀':'📈'; }
+// Store all tune results stably for button access
+let _allTuneResults = [];
+
+function renderTuneLive(results) {
+  _allTuneResults = results;
+  const fmt = v => '$'+Math.round(v).toLocaleString('en-CA');
+  document.getElementById('tune-live-results').innerHTML = results.map((r,i) =>
+    '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'
+    +'<span style="font-size:12px;color:var(--text3);min-width:24px">#'+(i+1)+'</span>'
+    +'<span style="font-size:18px;font-weight:700;color:'+r2Color(r.r2)+';font-family:var(--mono);min-width:54px">'+r.r2+'%</span>'
+    +'<span style="font-size:11px;white-space:nowrap">'+modelIcon(r.model)+' '+r.model+'</span>'
+    +'<span style="font-size:11px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.features.join(', ')+'</span>'
+    +'<span style="font-size:11px;color:var(--text3);font-family:var(--mono);white-space:nowrap">'+fmt(r.mae)+'</span>'
+    +'<button onclick="applyTuneConfig(_allTuneResults['+i+'].features,_allTuneResults['+i+'].model,true)" '
+    +'style="padding:3px 8px;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap">Use&amp;Train</button>'
+    +'</div>'
+  ).join('');
+}
+function renderTuneResults(results) {
+  _allTuneResults = results;
+  const fmt = v => '$'+Math.round(v).toLocaleString('en-CA');
+  document.getElementById('tune-results').style.display = 'block';
+  document.getElementById('tune-count-badge').textContent = results.length+' configs';
+  const best = results[0];
+  const bestMae = [...results].sort((a,b)=>a.mae-b.mae)[0];
+  const mc = {}; results.forEach(r => mc[r.model]=(mc[r.model]||0)+1);
+  const topModel = Object.entries(mc).sort((a,b)=>b[1]-a[1])[0]?.[0]||'?';
+  document.getElementById('tune-stats').innerHTML =
+    '<div class="stat-card"><div class="stat-val" style="color:var(--success)">'+(best?.r2||'?')+'%</div><div class="stat-label">Best R2</div></div>'
+    +'<div class="stat-card"><div class="stat-val" style="color:var(--accent)">'+fmt(bestMae?.mae||0)+'</div><div class="stat-label">Best MAE</div></div>'
+    +'<div class="stat-card"><div class="stat-val" style="font-size:13px;color:var(--accent2)">'+topModel+'</div><div class="stat-label">Top algo</div></div>'
+    +'<div class="stat-card"><div class="stat-val">'+(best?.n_features||'?')+'</div><div class="stat-label">Optimal features</div></div>';
+  document.getElementById('tune-tbody').innerHTML = results.map((r,i) => {
+    const badges = r.features.map(f => '<span style="display:inline-block;padding:1px 7px;margin:1px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;font-size:11px">'+f+'</span>').join('');
+    const bw = Math.min(100, r.r2);
+    return '<tr>'
+      +'<td style="font-size:12px;color:var(--text3);font-family:var(--mono)">#'+(i+1)+'</td>'
+      +'<td>'+badges+'</td>'
+      +'<td style="font-size:12px;white-space:nowrap">'+modelIcon(r.model)+' '+r.model+'</td>'
+      +'<td><div style="display:flex;align-items:center;gap:6px"><div style="width:60px;height:5px;background:var(--border);border-radius:3px"><div style="height:100%;width:'+bw+'%;background:'+r2Color(r.r2)+';border-radius:3px"></div></div><span style="font-family:var(--mono);font-size:13px;font-weight:700;color:'+r2Color(r.r2)+'">'+r.r2+'%</span></div></td>'
+      +'<td style="font-family:var(--mono);font-size:12px">'+fmt(r.mae)+'</td>'
+      +'<td style="white-space:nowrap">'
+      +'<button data-tidx="'+i+'" data-train="0" style="padding:3px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;cursor:pointer;font-size:11px;margin-right:4px">Apply</button>'
+      +'<button data-tidx="'+i+'" data-train="1" style="padding:3px 8px;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600">Use &amp; Train</button>'
+      +'</td>'
+      +'</tr>';
+  }).join('');
+  // Wire buttons via event delegation — no inline JS, no quote issues
+  document.getElementById('tune-tbody').querySelectorAll('button[data-tidx]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const r = _allTuneResults[+btn.dataset.tidx];
+      if (r) applyTuneConfig(r.features, r.model, btn.dataset.train === '1');
+    });
+  });
+}
+function applyTuneConfig(features, model, autoTrain) {
+  switchPage('prediction');
+  // Simply check/uncheck — no DOM reordering (causes bugs)
+  document.querySelectorAll('#pred-feature-list input[type=checkbox]').forEach(cb => {
+    cb.checked = features.includes(cb.value);
+    cb.closest('label').style.opacity = cb.checked ? '1' : '0.4';
+  });
+  const ms = document.getElementById('model-type');
+  if (model.includes('Forest'))      ms.value = 'random_forest';
+  else if (model.includes('Boost'))  ms.value = 'gradient_boosting';
+  else                                ms.value = 'linear';
+
+  const checked = [...document.querySelectorAll('#pred-feature-list input:checked')].length;
+  if (autoTrain) {
+    showToast('Applying ' + checked + ' features and training...', 'success');
+    setTimeout(trainModel, 300);
+  } else {
+    showToast('Applied: ' + checked + ' features selected. Click Train Model.', 'success');
+  }
+}
+function updateTuneEstimate() {
+  const features = [...document.querySelectorAll('#tune-feature-list input:checked')].map(c => c.value);
+  const minF     = parseInt(document.getElementById('tune-min-features').value) || 1;
+  const maxF     = parseInt(document.getElementById('tune-max-features').value) || 4;
+  if (features.length < 1) return;
+  fetch('/api/tune_estimate', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ feature_columns: features, min_features: minF, max_features: maxF })
+  }).then(r=>r.json()).then(d => {
+    const el = document.getElementById('tune-estimate');
+    el.style.display = 'block';
+    const mins = d.est_minutes;
+    const timeStr = mins < 1 ? '<1 min' : mins < 60 ? Math.round(mins)+' min' : (mins/60).toFixed(1)+' hrs';
+    const warn = mins > 60 ? ' ⚠️ Consider using max=4 or 5' : mins > 20 ? ' — use Stop if needed' : '';
+    el.style.color = mins > 60 ? 'var(--danger)' : mins > 20 ? 'var(--accent3)' : 'var(--accent2)';
+    el.innerHTML = d.n_combos.toLocaleString()+' combinations &times; algorithms = ~'+d.total_tests.toLocaleString()+' tests &nbsp;&nbsp; est. '+timeStr+warn;
+  });
+}
+
+function updateWorkerOptions() {
+  const n = Math.max(1, parseInt(document.getElementById('tune-n-workers').value) || 1);
+  document.getElementById('tune-merge-section').style.display = n > 1 ? 'block' : 'none';
+}
+
+function getWorkerParams() {
+  const nw  = Math.max(1, parseInt(document.getElementById('tune-n-workers').value) || 1);
+  const wid = Math.max(1, Math.min(nw, parseInt(document.getElementById('tune-worker-id').value) || 1));
+  const nj  = parseInt(document.getElementById('tune-n-jobs').value) || -1;
+  return { worker_id: wid - 1, n_workers: nw, n_jobs: nj };  // convert to 0-based
+}
+
+async function mergeResults() {
+  const lines  = document.getElementById('tune-merge-jobs').value.trim().split('\n').filter(Boolean);
+  const allIds = [window._currentTuneJobId, ...lines].filter(Boolean);
+  if (allIds.length < 2) { showToast('Need at least 2 job IDs to merge', 'error'); return; }
+  const r = await fetch('/api/tune_merge', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ job_ids: allIds, top_n: parseInt(document.getElementById('tune-top-n').value) })
+  });
+  const d = await r.json();
+  if (d.error) { showToast(d.error, 'error'); return; }
+  renderTuneResults(d.results);
+  showToast('Merged '+d.total+' unique results from '+d.workers+' workers', 'success');
+}
+
+function saveTunePreset() {
+  const checked = [...document.querySelectorAll('#tune-feature-list input:checked')].map(c => c.value);
+  const target  = document.getElementById('tune-target')?.value || '';
+  const minF    = document.getElementById('tune-min-features')?.value || '1';
+  const maxF    = document.getElementById('tune-max-features')?.value || '4';
+  localStorage.setItem('realtyiq_tune_preset', JSON.stringify({ checked, target, minF, maxF }));
+  showToast('Tuning preset saved', 'success');
+}
+function restoreTunePreset() {
+  const raw = localStorage.getItem('realtyiq_tune_preset');
+  if (!raw) { showToast('No saved preset', 'error'); return; }
+  try {
+    const p = JSON.parse(raw);
+    const cs = new Set(p.checked || []);
+    document.querySelectorAll('#tune-feature-list input').forEach(cb => { cb.checked = cs.has(cb.value); });
+    if (p.target) { const s = document.getElementById('tune-target'); if(s) s.value = p.target; }
+    if (p.minF)   { const s = document.getElementById('tune-min-features'); if(s) s.value = p.minF; }
+    if (p.maxF)   { const s = document.getElementById('tune-max-features'); if(s) s.value = p.maxF; }
+    showToast('Restored: ' + (p.checked?.length||0) + ' features', 'success');
+  } catch(e) { showToast('Could not restore', 'error'); }
+}
+// =================== END TUNING ===================
+
+
+// =================== LOCALSTORAGE PERSISTENCE ===================
+const LS_FEATURES   = 'realtyiq_feature_preset';
+const LS_FILTER     = 'realtyiq_global_filter';
+const LS_TARGET     = 'realtyiq_target_col';
+const LS_MODEL      = 'realtyiq_model_type';
+
+function saveFeaturePreset() {
+  const checked   = [...document.querySelectorAll('#pred-feature-list input:checked')].map(c => c.value);
+  const unchecked = [...document.querySelectorAll('#pred-feature-list input:not(:checked)')].map(c => c.value);
+  const target    = document.getElementById('target-col')?.value || '';
+  const model     = document.getElementById('model-type')?.value || '';
+  localStorage.setItem(LS_FEATURES, JSON.stringify({ checked, unchecked, target, model }));
+  showToast(`Saved ${checked.length} features`, 'success');
+}
+
+function restoreFeaturePreset() {
+  const raw = localStorage.getItem(LS_FEATURES);
+  if (!raw) { showToast('No saved selection found', 'error'); return; }
+  try {
+    const preset = JSON.parse(raw);
+    const checkedSet = new Set(preset.checked || []);
+    let restored = 0;
+    document.querySelectorAll('#pred-feature-list input').forEach(cb => {
+      const was = cb.checked;
+      cb.checked = checkedSet.has(cb.value);
+      cb.closest('label').style.opacity = cb.checked ? '1' : '0.4';
+      if (cb.checked !== was) restored++;
+    });
+    if (preset.target) { const s = document.getElementById('target-col'); if (s) s.value = preset.target; }
+    if (preset.model)  { const s = document.getElementById('model-type');  if (s) s.value = preset.model; }
+    showToast(`Restored: ${preset.checked?.length || 0} features selected`, 'success');
+  } catch(e) { showToast('Could not restore preset', 'error'); }
+}
+
+function saveGlobalFilter() {
+  const filters = getGlobalFilters();
+  if (Object.keys(filters).length) localStorage.setItem(LS_FILTER, JSON.stringify(filters));
+  else localStorage.removeItem(LS_FILTER);
+}
+
+function loadGlobalFilter() {
+  const raw = localStorage.getItem(LS_FILTER);
+  if (!raw) return;
+  try {
+    const filters = JSON.parse(raw);
+    // Apply checkboxes in the filter panel
+    Object.entries(filters).forEach(([col, vals]) => {
+      const list = document.getElementById('gf-'+col);
+      if (!list) return;
+      const valSet = new Set(Array.isArray(vals) ? vals : [vals]);
+      list.querySelectorAll('input').forEach(cb => {
+        cb.checked = valSet.has(cb.value);
+      });
+    });
+    applyGlobalFilters();
+  } catch(e) {}
+}
+
+// =================== END LOCALSTORAGE ===================
+
+// Upload zone — <label for="csv-input"> handles click natively; only need drag/drop here
+const csvInput = document.getElementById('csv-input');
+csvInput.addEventListener('change', () => uploadFile(csvInput.files[0]));
+const zone = document.getElementById('upload-zone');
+zone.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); zone.classList.add('drag'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+zone.addEventListener('drop', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  zone.classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) uploadFile(file);
+});
+</script>
+</body>
+</html>
