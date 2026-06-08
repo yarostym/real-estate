@@ -1210,6 +1210,12 @@
                 title="Train RF on all features → keep only impactful ones">
           ✨ Smart Select
         </button>
+        <button onclick="copyTuneFeatures()"
+                style="padding:4px 10px;font-size:11px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;cursor:pointer;color:var(--text2)"
+                title="Copy selected features as text">📋 Copy</button>
+        <button onclick="pasteTuneFeatures()"
+                style="padding:4px 10px;font-size:11px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;cursor:pointer;color:var(--text2)"
+                title="Paste features from text">📥 Paste</button>
       </div>
       <!-- Smart select result panel -->
       <div id="smart-select-panel" style="display:none;margin-bottom:10px;padding:8px 10px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;font-size:11px">
@@ -3892,6 +3898,7 @@ let _allTuneResults = [];
 
 // =================== SMART FEATURE SELECTION ===================
 let _smartRanked = [];
+let _smartData   = {};
 
 async function runSmartFeatureSelect() {
   const btn = document.getElementById('smart-select-btn');
@@ -3910,6 +3917,7 @@ async function runSmartFeatureSelect() {
     const d = await r.json();
     if (d.error) { showToast(d.error, 'error'); return; }
     _smartRanked = d.ranked || [];
+    _smartData   = d;  // keep full response including feat_status, shadow_threshold
     renderSmartSelectBars(d);
     document.getElementById('smart-select-panel').style.display = 'block';
     showToast('Analysed ' + d.total_tested + ' features (R²=' + (d.r2_train*100).toFixed(1) + '%)', 'success');
@@ -3918,20 +3926,33 @@ async function runSmartFeatureSelect() {
 }
 
 function renderSmartSelectBars(d) {
-  const bars  = document.getElementById('smart-select-bars');
+  const bars      = document.getElementById('smart-select-bars');
   const threshold = parseFloat(document.getElementById('smart-threshold')?.value || '0.5');
-  const ranked = d.ranked || _smartRanked;
-  const maxImp = ranked[0]?.[1] || 1;
-  bars.innerHTML = ranked.map(([f, pct]) => {
-    const barW  = Math.round(pct / maxImp * 100);
-    const color = pct >= 5 ? 'var(--success)' : pct >= 1 ? 'var(--accent)' : pct >= threshold ? 'var(--accent3)' : 'var(--border2)';
-    const dim   = pct < threshold ? 'opacity:0.45' : '';
+  const ranked    = d.ranked || _smartRanked;
+  const status    = d.feat_status || {};
+  const shadowPct = d.shadow_threshold || 0;
+  const maxImp    = ranked[0]?.[1] || 1;
+
+  let header = '';
+  if (shadowPct > 0) {
+    header = '<div style="font-size:10px;color:var(--accent2);margin-bottom:6px;padding:4px 6px;background:var(--surface2);border-radius:5px">'
+      + '📊 Shadow threshold: <b>' + shadowPct + '%</b> — features below this are statistically indistinguishable from random noise'
+      + '</div>';
+  }
+
+  bars.innerHTML = header + ranked.map(([f, pct]) => {
+    const barW   = Math.round(pct / maxImp * 100);
+    const st     = status[f] || (pct >= (shadowPct || threshold) ? 'real' : 'noise');
+    const color  = st==='real' ? 'var(--success)' : st==='maybe' ? 'var(--accent3)' : 'var(--text3)';
+    const icon   = st==='real' ? '✅' : st==='maybe' ? '〜' : '❌';
+    const dim    = st==='noise' ? 'opacity:0.4' : '';
     return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;'+dim+'">'
+      + '<span style="min-width:14px;font-size:10px">'+icon+'</span>'
       + '<span style="min-width:110px;font-size:10px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+f+'</span>'
       + '<div style="flex:1;background:var(--border);border-radius:3px;height:12px;position:relative;min-width:30px">'
       + '<div style="height:100%;width:'+barW+'%;background:'+color+';border-radius:3px"></div>'
       + '</div>'
-      + '<span style="min-width:38px;font-size:10px;font-family:var(--mono);color:'+color+';text-align:right">'+pct+'%</span>'
+      + '<span style="min-width:42px;font-size:10px;font-family:var(--mono);color:'+color+';text-align:right">'+pct+'%</span>'
       + '</div>';
   }).join('');
 }
@@ -3939,8 +3960,22 @@ function renderSmartSelectBars(d) {
 function applySmartSelection() {
   if (!_smartRanked.length) return;
   const threshold = parseFloat(document.getElementById('smart-threshold')?.value || '0.5');
-  const selected  = new Set(_smartRanked.filter(([,pct]) => pct >= threshold).map(([f]) => f));
-  // Always include top 3
+  const status    = _smartData.feat_status || {};
+  const shadowPct = _smartData.shadow_threshold || 0;
+  const effective = Math.max(threshold, shadowPct);
+  // Include: real status OR above effective threshold
+  // Include: real + maybe always; noise only if above effective threshold
+  const selected = new Set(
+    _smartRanked
+      .filter(([f, pct]) => {
+        const st = status[f];
+        if (st === 'real' || st === 'maybe') return true;
+        if (pct >= effective) return true;
+        return false;
+      })
+      .map(([f]) => f)
+  );
+  // Always top 3
   _smartRanked.slice(0,3).forEach(([f]) => selected.add(f));
   let applied = 0;
   document.querySelectorAll('#tune-feature-list input[type=checkbox]').forEach(cb => {
@@ -3952,17 +3987,76 @@ function applySmartSelection() {
     cb.closest('label').style.opacity = inSet ? '1' : '0.4';
   });
   updateTuneEstimate();
-  showToast('Selected ' + applied + ' features above ' + threshold + '%', 'success');
-  // Re-render bars with updated threshold
-  renderSmartSelectBars({ranked: _smartRanked});
+  showToast('Selected ' + applied + ' features (shadow threshold: ' + effective.toFixed(3) + '%)', 'success');
+  renderSmartSelectBars(_smartData);
 }
 
 // Re-render when threshold changes
 document.addEventListener('input', e => {
   if (e.target.id === 'smart-threshold' && _smartRanked.length) {
-    renderSmartSelectBars({ranked: _smartRanked});
+    renderSmartSelectBars(_smartData);
   }
 });
+function copyTuneFeatures() {
+  const checked = [...document.querySelectorAll('#tune-feature-list input:checked')].map(c => c.value);
+  const required = [...document.querySelectorAll('#tune-feature-list input[data-required="1"]')].map(c => c.value);
+  const target  = document.getElementById('tune-target')?.value || '';
+  const minF    = document.getElementById('tune-min-features')?.value || '2';
+  const maxF    = document.getElementById('tune-max-features')?.value || '4';
+  const text    = JSON.stringify({ features: checked, required, target, minF, maxF }, null, 2);
+  navigator.clipboard.writeText(text).then(
+    () => showToast('Copied ' + checked.length + ' features to clipboard', 'success'),
+    () => { const ta = document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('Copied!', 'success'); }
+  );
+}
+
+function pasteTuneFeatures() {
+  // Try clipboard API first, fall back to prompt
+  const apply = text => {
+    if (!text) return;
+    try {
+      const p = JSON.parse(text);
+      const featSet = new Set(p.features || []);
+      const reqSet  = new Set(p.required || []);
+      let applied = 0;
+      document.querySelectorAll('#tune-feature-list input[type=checkbox]').forEach(cb => {
+        const inSet = featSet.has(cb.value);
+        cb.checked = inSet;
+        cb.closest('label').style.opacity = inSet ? '1' : '0.4';
+        if (reqSet.has(cb.value)) { cb.dataset.required = '1'; markRequiredLabel(cb); }
+        else if (cb.dataset.required === '1') { cb.dataset.required = '0'; markRequiredLabel(cb); }
+        if (inSet) applied++;
+      });
+      if (p.target) { const s = document.getElementById('tune-target'); if(s) s.value = p.target; }
+      if (p.minF)   { const s = document.getElementById('tune-min-features'); if(s) s.value = p.minF; }
+      if (p.maxF)   { const s = document.getElementById('tune-max-features'); if(s) s.value = p.maxF; }
+      updateTuneEstimate();
+      showToast('Applied ' + applied + ' features', 'success');
+    } catch(e) {
+      // Try plain comma/newline separated list
+      const lines = text.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
+      if (lines.length) {
+        const featSet = new Set(lines);
+        let applied = 0;
+        document.querySelectorAll('#tune-feature-list input[type=checkbox]').forEach(cb => {
+          const inSet = featSet.has(cb.value);
+          cb.checked = inSet;
+          cb.closest('label').style.opacity = inSet ? '1' : '0.4';
+          if (inSet) applied++;
+        });
+        updateTuneEstimate();
+        showToast('Applied ' + applied + ' features', 'success');
+      } else {
+        showToast('Invalid format. Expected JSON or comma-separated list.', 'error');
+      }
+    }
+  };
+  if (navigator.clipboard?.readText) {
+    navigator.clipboard.readText().then(apply).catch(() => apply(prompt('Paste features JSON or comma-separated list:')));
+  } else {
+    apply(prompt('Paste features JSON or comma-separated list:'));
+  }
+}
 // =================== END SMART FEATURE SELECTION ===================
 function computeFeatureImpact(results) {
   // Size-controlled impact: compare features within same combo size

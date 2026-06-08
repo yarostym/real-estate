@@ -2702,13 +2702,22 @@ def smart_feature_select():
         return jsonify({'error': 'Could not encode features'}), 400
 
     X = np.column_stack(X_cols).astype(float)
-    rf = RandomForestRegressor(n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1)
-    rf.fit(X, y_fit)
+    # Build augmented matrix with shadow features (shuffled copies)
+    rng = np.random.RandomState(42)
+    X_shadow = np.column_stack([rng.permutation(X[:,i]) for i in range(X.shape[1])])
+    X_aug    = np.hstack([X, X_shadow])
 
-    # Aggregate importances back to original columns (OHE cols → parent col)
-    raw_imp = rf.feature_importances_
+    rf = RandomForestRegressor(n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1)
+    rf.fit(X_aug, y_fit)
+
+    raw_all   = rf.feature_importances_
+    real_imps = raw_all[:len(feat_names)]
+    shad_imps = raw_all[len(feat_names):]
+    shadow_threshold = float(shad_imps.max())   # Boruta-style: must beat best shadow
+
+    # Aggregate importances back to original columns
     col_imp = {}
-    for name, imp in zip(feat_names, raw_imp):
+    for name, imp in zip(feat_names, real_imps):
         base = name.split('__')[0].replace('_ppsf','')
         col_imp[base] = col_imp.get(base, 0) + imp
 
@@ -2716,19 +2725,36 @@ def smart_feature_select():
     ranked = sorted(col_imp.items(), key=lambda x: -x[1])
     ranked_pct = [(col, round(imp/total*100, 2)) for col, imp in ranked]
 
-    # Which original candidate cols to include
-    selected = [col for col, pct in ranked_pct if pct >= threshold]
-    # Always include top-3 even if below threshold
+    # Shadow threshold in percentage terms
+    shadow_pct = round(shadow_threshold / total * 100, 3) if total > 0 else threshold
+
+    # Status per feature
+    feat_status = {}
+    for name, raw_imp_val in zip(feat_names, real_imps):
+        base = name.split('__')[0].replace('_ppsf','')
+        prev = feat_status.get(base, 0)
+        feat_status[base] = prev + raw_imp_val
+    for base in feat_status:
+        v = feat_status[base]
+        feat_status[base] = 'real' if v > shadow_threshold else ('maybe' if v > shad_imps.mean() else 'noise')
+
+    # Use shadow threshold if available, otherwise user threshold
+    effective_threshold = max(threshold, shadow_pct)
+    selected = [col for col, pct in ranked_pct
+                if pct >= effective_threshold or feat_status.get(col) == 'real']
+    # Always include top-3
     for col, _ in ranked_pct[:3]:
         if col not in selected:
             selected.append(col)
 
     return jsonify({
-        'ranked':   ranked_pct,       # [(col, importance_pct), ...]
-        'selected': selected,          # cols above threshold
-        'threshold': threshold,
-        'total_tested': len(candidate_cols),
-        'r2_train': round(float(rf.score(X, y_fit)), 4),
+        'ranked':           ranked_pct,
+        'selected':         selected,
+        'threshold':        threshold,
+        'shadow_threshold': round(shadow_pct, 3),
+        'feat_status':      feat_status,
+        'total_tested':     len(candidate_cols),
+        'r2_train':         round(float(rf.score(X_aug, y_fit)), 4),
     })
 
 if __name__ == '__main__':
