@@ -702,6 +702,7 @@
         <option value="random_forest">Random Forest 🌲</option>
         <option value="gradient_boosting">Gradient Boosting 🚀</option>
         <option value="linear">Linear Regression 📈</option>
+        <option value="stacking">Stacking 🔗 (RF + GB)</option>
       </select>
 
       <label class="check-item" style="margin-top:8px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border2)">
@@ -1174,15 +1175,24 @@
                  style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px"
                  title="-1 = all cores, 1 = single, 4 = 4 cores">
         </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
         <div style="flex:1">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Parallel combos</div>
-          <input type="number" id="tune-parallel-combos" value="1" min="1" max="16"
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Batch size</div>
+          <input type="number" id="tune-parallel-combos" value="1" min="1" max="10000"
                  style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px"
-                 title="How many feature combinations to test simultaneously in Phase 1">
+                 title="Combos queued per round (e.g. 200). Progress updates every batch."
+                 onchange="updateTuneEstimate()">
+        </div>
+        <div style="flex:1">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Threads</div>
+          <input type="number" id="tune-n-threads" value="1" min="1" max="64"
+                 style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px"
+                 title="Real parallel workers (capped at CPU cores).">
         </div>
       </div>
       <div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.5">
-        <b>CPU threads</b>: -1 = all cores per combo. <b>Parallel combos</b>: how many combos test simultaneously — each gets CPU/parallel slice. Best: set CPU threads = total_cores / parallel_combos.<br>Parallel combos work <i>within</i> your machine's assigned subset (Total machines split happens first, then parallel combos split that subset further).
+        <b>Batch</b>: combos queued per round. <b>Threads</b>: parallel workers (≤ CPU cores). <b>CPU threads</b>: cores per RF. Best on 8-core: Threads=4, CPU=2.
       </div>
 
       <div style="display:flex;gap:8px;margin-top:8px">
@@ -1280,6 +1290,11 @@ function uploadFile(file) {
       appData._city_to_districts = data.city_to_districts || {};
       setStatus(true, `${data.rows} rows · ${data.columns} columns`);
       showToast(`Loaded: ${data.rows} rows, ${data.columns} columns`, 'success');
+      // Show derived features toast
+      const _dr = ['age','lot_ratio','room_density','bath_ratio','has_view','has_fireplace',
+                   'has_cooling','has_parking_feat','has_appliances','has_interior'];
+      const _drFound = _dr.filter(c => data.numeric_columns.includes(c));
+      if (_drFound.length) setTimeout(() => showToast('✨ Auto-created ' + _drFound.length + ' derived features: ' + _drFound.join(', '), 'success'), 800);
     })
     .catch(() => { showToast('Upload error', 'error'); resetUpload(); });
 }
@@ -1798,10 +1813,10 @@ function showPredResults(data) {
   if (r2Note) {
     const n = data.train_size + data.test_size;
     let note = '';
-    if (r2 < 0.5 && n < 200) note = 'Low — only '+n+' rows. Add more data or features.';
-    else if (r2 < 0.5) note = 'Model explains <50% of variance. Add location features (district, city).';
-    else if (r2 < 0.7) note = 'Fair. Tuning may show 2-5% higher R2 — expected due to encoding method.';
-    else if (r2 < 0.85) note = 'Good. Tuning may show +2-5% higher — normal difference in CV methodology.';
+    if (r2 < 0.5 && n < 200) note = 'Low — only '+n+' rows. Try more data or add derived features (age, lot_ratio).';
+    else if (r2 < 0.5) note = 'Model explains <50% of variance. Add location features (district, city) and derived features.';
+    else if (r2 < 0.7) note = 'Fair. Try adding derived features (age, lot_ratio, has_view) or use Stacking algorithm.';
+    else if (r2 < 0.85) note = 'Good. Small ±1% difference vs Tuning is normal (random KFold splits).';
     else note = 'Excellent — verify no data leakage.';
     r2Note.textContent = note;
   }
@@ -3226,6 +3241,7 @@ function setupTuningUI(data) {
         if (p.minF)   { const s = document.getElementById('tune-min-features'); if(s) s.value = p.minF; }
         if (p.maxF)   { const s = document.getElementById('tune-max-features'); if(s) s.value = p.maxF; }
         if (p.parC)   { const s = document.getElementById('tune-parallel-combos'); if(s) s.value = p.parC; }
+    if (p.nThr)   { const s = document.getElementById('tune-n-threads');       if(s) s.value = p.nThr; }
         if (p.nJobs)  { const s = document.getElementById('tune-n-jobs');          if(s) s.value = p.nJobs; }
         if (p.nWork)  { const s = document.getElementById('tune-n-workers');       if(s) s.value = p.nWork; updateWorkerOptions(); }
         if (p.wId)    { const s = document.getElementById('tune-worker-id');       if(s) s.value = p.wId; }
@@ -3270,10 +3286,53 @@ function toggleRequired(btn, e) {
 function getRequiredFeatures() {
   return [...document.querySelectorAll('#tune-feature-list input[data-required="1"]')].map(c => c.value);
 }
+// ── Client-driven batch tuning ──
+let _tuneStop    = false;
+let _tuneAllRes  = [];
+let _tuneStartT  = 0;
+
 function runTuning() {
-  const target = document.getElementById('tune-target').value;
+  const target   = document.getElementById('tune-target').value;
   const features = [...document.querySelectorAll('#tune-feature-list input:checked')].map(c => c.value);
+  const required = getRequiredFeatures();
   if (features.length < 2) { showToast('Select at least 2 features', 'error'); return; }
+
+  const minF    = parseInt(document.getElementById('tune-min-features').value) || 1;
+  const maxF    = parseInt(document.getElementById('tune-max-features').value) || 4;
+  const topN    = parseInt(document.getElementById('tune-top-n').value) || 100;
+  const useLog  = document.getElementById('tune-log').checked;
+  const rmOut   = document.getElementById('tune-outliers').checked;
+  const batchSz = parseInt(document.getElementById('tune-parallel-combos').value) || 1;
+  const nThr    = parseInt(document.getElementById('tune-n-threads')?.value) || 1;
+  const nJobs   = parseInt(document.getElementById('tune-n-jobs')?.value) || -1;
+  const wp      = getWorkerParams();
+
+  // Generate all combos client-side
+  const reqSet = new Set(required);
+  const allCombos = [];
+  const generateCombos = (arr, size) => {
+    if (size === 0) return [[]];
+    if (arr.length < size) return [];
+    const [first, ...rest] = arr;
+    return [...generateCombos(rest, size-1).map(c => [first,...c]), ...generateCombos(rest, size)];
+  };
+  const nonReq = features.filter(f => !reqSet.has(f));
+  const reqArr = required;
+  for (let s = minF; s <= Math.min(maxF, features.length); s++) {
+    const freeSlots = s - reqArr.length;
+    if (freeSlots < 0) continue;
+    if (freeSlots === 0) { allCombos.push([...reqArr]); continue; }
+    generateCombos(nonReq, freeSlots).forEach(c => allCombos.push([...reqArr, ...c]));
+  }
+
+  // Apply worker split
+  const workerCombos = wp.n_workers > 1
+    ? allCombos.filter((_, i) => i % wp.n_workers === wp.worker_id)
+    : allCombos;
+
+  const totalTests = workerCombos.length;
+  if (totalTests === 0) { showToast('No combinations to test', 'error'); return; }
+
   document.getElementById('tune-empty').style.display = 'none';
   document.getElementById('tune-results').style.display = 'none';
   document.getElementById('tune-progress-panel').style.display = 'block';
@@ -3281,71 +3340,110 @@ function runTuning() {
   document.getElementById('tune-run-btn').innerHTML = '<span class="spinner"></span> Running...';
   document.getElementById('tune-progress-bar').style.width = '0%';
   document.getElementById('tune-live-results').innerHTML = '';
+  document.getElementById('tune-progress-badge').textContent = '0 / ' + totalTests + ' tests';
+  document.getElementById('tune-stop-btn').style.display = 'block';
+
   const _taf = (typeof getGlobalFilters==='function') ? getGlobalFilters() : {};
   const _tafParts = Object.entries(_taf).map(([k,v]) => Array.isArray(v) ? k+': '+v.join(', ') : k+': '+v);
-  document.getElementById('tune-progress-text').textContent = _tafParts.length ? 'Filter: '+_tafParts.join(' - ') : 'No filter — all data';
-  const wp = getWorkerParams();
-  fetch('/api/tune', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({
-      target_column: target, feature_columns: features,
-      min_features: parseInt(document.getElementById('tune-min-features').value) || 1,
-      max_features: parseInt(document.getElementById('tune-max-features').value) || 4,
-      top_n: parseInt(document.getElementById('tune-top-n').value) || 100,
-      use_log_target: document.getElementById('tune-log').checked,
-      remove_outliers: document.getElementById('tune-outliers').checked,
-      worker_id: wp.worker_id, n_workers: wp.n_workers, n_jobs: wp.n_jobs,
-      parallel_combos: parseInt(document.getElementById('tune-parallel-combos').value) || 1,
-      required_features: getRequiredFeatures(),
-    })
-  }).then(r=>r.json()).then(d => {
-    if (d.error) { showToast(d.error,'error'); resetTuneBtn(); return; }
-    _tuneJobId = d.job_id;
-    window._currentTuneJobId = d.job_id;  // for merge
-    document.getElementById('tune-progress-badge').textContent = '0 / ' + d.total + ' tests';
-    document.getElementById('tune-stop-btn').style.display = 'block';
-    // Show job ID for copy-paste to other machines
-    const wid = document.getElementById('tune-worker-id').value;
-    const nw  = document.getElementById('tune-n-workers').value;
-    if (parseInt(nw) > 1) showToast('Worker '+( parseInt(wid)+1)+'/'+nw+' job: '+d.job_id, 'success');
-    pollTuning();
-  });
-}
-function pollTuning() {
-  if (!_tuneJobId) return;
-  fetch('/api/tune_status?job_id='+_tuneJobId)
-  .then(r=>r.json()).then(d => {
-    const pct = d.total > 0 ? Math.round(d.progress/d.total*100) : 0;
-    document.getElementById('tune-progress-bar').style.width = pct+'%';
-    document.getElementById('tune-progress-badge').textContent = d.progress+' / '+d.total+' tests';
-    const phase = d.phase || '';
-    document.getElementById('tune-progress-text').textContent = (phase ? phase + '  —  ' : '') + d.progress+' tests done, '+d.results.length+' valid results';
-    if (d.results.length) renderTuneLive(d.results);
-    if (d.status === 'done' || d.status === 'stopped') {
-      document.getElementById('tune-progress-panel').style.display = 'none';
-      if (d.results && d.results.length) renderTuneResults(d.results);
-      resetTuneBtn();
-      if (d.status === 'done') showToast('Done! Best R2 = ' + (d.results[0]?.r2 || '?') + '%', 'success');
-    } else if (d.status === 'error') {
-      resetTuneBtn();
-    } else {
-      setTimeout(pollTuning, 1200);
-    }
-  });
-}
-function stopTuning() {
-  if (!_tuneJobId) return;
-  const jid = _tuneJobId;
-  _tuneJobId = null;
-  fetch('/api/tune_stop?job_id=' + jid, { method: 'POST' }).then(() => {
-    // Show results collected so far
-    fetch('/api/tune_status?job_id=' + jid).then(r => r.json()).then(d => {
-      document.getElementById('tune-progress-panel').style.display = 'none';
-      if (d.results && d.results.length) renderTuneResults(d.results);
+  document.getElementById('tune-progress-text').textContent = (_tafParts.length ? 'Filter: '+_tafParts.join(' - ')+'. ' : '') + totalTests + ' combos, batches of '+batchSz+', '+nThr+' threads';
+
+  _tuneStop   = false;
+  _tuneAllRes = [];
+  _tuneStartT = Date.now();
+  window._currentTuneJobId = 'batch_' + Date.now();
+
+  // Run all combos with rf_full directly — accurate scores from the start
+  // With batching+threads this is fast enough; no need for rf_fast pre-screening
+  const phase1Total = workerCombos.length;
+  runBatchPhase(workerCombos, 'rf_full', 'Phase 1/2: scoring all combos (RF n=200)',
+    phase1Total + Math.floor(phase1Total*0.3), 0, target, useLog, rmOut, nThr, nJobs, batchSz, topN,
+    (done) => {
+      if (_tuneStop) { finalizeTuning(topN); return; }
+      // Phase 2: top 30% with GB + Linear
+      const top30 = [..._tuneAllRes].sort((a,b)=>b.r2-a.r2)
+                      .slice(0, Math.max(1, Math.floor(_tuneAllRes.length*0.3)))
+                      .map(r => r.features);
+      const phase2Total = done + top30.length * 2;
+      document.getElementById('tune-progress-badge').textContent = done + ' / ' + phase2Total + ' tests';
+      runBatchPhase(top30, 'gb', 'Phase 2/2: GB on top 30%',
+        phase2Total, done, target, useLog, rmOut, nThr, nJobs, Math.max(batchSz, top30.length), topN,
+        (done2) => {
+          runBatchPhase(top30, 'linear', 'Phase 2/2: Linear on top 30%',
+            done2 + top30.length, done2, target, useLog, rmOut, top30.length, topN,
+            () => finalizeTuning(topN));
+        });
     });
-  });
+}
+
+async function runBatchPhase(combos, modelType, phaseName, totalTests, doneOffset,
+                              target, useLog, rmOut, nThr, nJobs, batchSz, topN, onDone) {
+  let done = doneOffset;
+  document.getElementById('tune-progress-text').textContent = phaseName;
+
+  for (let i = 0; i < combos.length; i += batchSz) {
+    if (_tuneStop) break;
+    const batch = combos.slice(i, i + batchSz);
+    try {
+      const resp = await fetch('/api/tune_batch', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          combos: batch, target_column: target, model_type: modelType,
+          use_log_target: useLog, remove_outliers: rmOut,
+          n_threads: nThr, n_jobs: nJobs,
+        })
+      });
+      const d = await resp.json();
+      if (d.error) { showToast(d.error, 'error'); break; }
+      if (i === 0 && d.cpu_info) {
+        const el = document.getElementById('tune-progress-text');
+        el.textContent = d.cpu_info + '  |  ' + el.textContent;
+      }
+      done += d.n;
+
+      // Merge results — Phase 2/3 always overwrites Phase 1 for same features
+      const featKey = f => [...f].sort().join('|');
+      for (const r of d.results) {
+        const key = featKey(r.features);
+        const existIdx = _tuneAllRes.findIndex(x => featKey(x.features) === key && x.model === r.model);
+        if (existIdx >= 0) {
+          // Always overwrite — later phases (rf_full) are more accurate than rf_fast
+          _tuneAllRes[existIdx] = { ..._tuneAllRes[existIdx], r2: r.r2, mae: r.mae };
+        } else {
+          _tuneAllRes.push(r);
+        }
+      }
+      _tuneAllRes.sort((a,b) => b.r2 - a.r2);
+
+      // Update progress
+      const pct = totalTests > 0 ? Math.round(done / totalTests * 100) : 0;
+      document.getElementById('tune-progress-bar').style.width = pct + '%';
+      document.getElementById('tune-progress-badge').textContent = done + ' / ' + totalTests + ' tests';
+      const elapsed = (Date.now() - _tuneStartT) / 1000;
+      const speed   = elapsed > 0 ? (done - doneOffset) / elapsed : 0;
+      const eta     = speed > 0 ? Math.round((totalTests - done) / speed) : 0;
+      const etaStr  = eta > 0 ? (eta < 60 ? ' — '+eta+'s left' : ' — '+Math.round(eta/60)+'min left') : '';
+      const spdStr  = speed > 0 ? '  '+speed.toFixed(1)+'/s' : '';
+      document.getElementById('tune-progress-text').textContent = phaseName + spdStr + etaStr + '  |  ' + _tuneAllRes.length + ' results';
+
+      renderTuneLive(_tuneAllRes);
+    } catch(e) { showToast('Batch error: ' + e.message, 'error'); break; }
+  }
+  if (onDone) onDone(done);
+}
+
+function finalizeTuning(topN) {
+  document.getElementById('tune-progress-panel').style.display = 'none';
+  const top = _tuneAllRes.slice(0, topN);
+  if (top.length) renderTuneResults(top);
   resetTuneBtn();
-  showToast('Tuning stopped — showing partial results', 'success');
+  showToast('Done! Best R² = ' + (top[0]?.r2 || '?') + '%', 'success');
+  _allTuneResults = top;
+}
+// pollTuning removed — replaced by client-driven runBatchPhase
+function stopTuning() {
+  _tuneStop = true;
+  resetTuneBtn();
+  showToast('Stopping after current batch...', 'success');
 }
 
 function resetTuneBtn() {
@@ -3431,6 +3529,13 @@ function applyTuneConfig(features, model, autoTrain) {
   }
 }
 function updateTuneEstimate() {
+  const pc = parseInt(document.getElementById('tune-parallel-combos')?.value) || 1;
+  const warn = document.getElementById('tune-parallel-warn');
+  if (warn) {
+    if (pc > 16) { warn.textContent = 'Backend caps at 2x CPU cores'; warn.style.color = 'var(--danger)'; }
+    else if (pc > 8) { warn.textContent = 'High — diminishing returns above core count'; warn.style.color = 'var(--accent3)'; }
+    else { warn.textContent = ''; }
+  }
   const features = [...document.querySelectorAll('#tune-feature-list input:checked')].map(c => c.value);
   const minF     = parseInt(document.getElementById('tune-min-features').value) || 1;
   const maxF     = parseInt(document.getElementById('tune-max-features').value) || 4;
@@ -3481,11 +3586,12 @@ function saveTunePreset() {
   const minF    = document.getElementById('tune-min-features')?.value || '1';
   const maxF    = document.getElementById('tune-max-features')?.value || '4';
   const parC    = document.getElementById('tune-parallel-combos')?.value || '1';
+  const nThr    = document.getElementById('tune-n-threads')?.value || '1';
   const nJobs   = document.getElementById('tune-n-jobs')?.value || '-1';
   const nWork   = document.getElementById('tune-n-workers')?.value || '1';
   const wId     = document.getElementById('tune-worker-id')?.value || '1';
   const reqd    = [...document.querySelectorAll('#tune-feature-list input[data-required="1"]')].map(c => c.value);
-  localStorage.setItem('realtyiq_tune_preset', JSON.stringify({ checked, target, minF, maxF, parC, nJobs, nWork, wId, required: reqd }));
+  localStorage.setItem('realtyiq_tune_preset', JSON.stringify({ checked, target, minF, maxF, parC, nThr, nJobs, nWork, wId, required: reqd }));
   showToast('Tuning preset saved', 'success');
 }
 function restoreTunePreset() {
@@ -3499,6 +3605,7 @@ function restoreTunePreset() {
     if (p.minF)   { const s = document.getElementById('tune-min-features'); if(s) s.value = p.minF; }
     if (p.maxF)   { const s = document.getElementById('tune-max-features'); if(s) s.value = p.maxF; }
     if (p.parC)   { const s = document.getElementById('tune-parallel-combos'); if(s) s.value = p.parC; }
+    if (p.nThr)   { const s = document.getElementById('tune-n-threads');       if(s) s.value = p.nThr; }
     if (p.nJobs)  { const s = document.getElementById('tune-n-jobs');          if(s) s.value = p.nJobs; }
     if (p.nWork)  { const s = document.getElementById('tune-n-workers');       if(s) s.value = p.nWork; updateWorkerOptions(); }
     if (p.wId)    { const s = document.getElementById('tune-worker-id');       if(s) s.value = p.wId; }

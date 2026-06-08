@@ -10,10 +10,38 @@ import io
 import re
 import warnings
 warnings.filterwarnings('ignore')
+warnings.filterwarnings('ignore', message='.*sklearn.utils.parallel.*', category=UserWarning)
+warnings.filterwarnings('ignore', message='.*delayed.*Parallel.*', category=UserWarning)
+# Also set PYTHONWARNINGS env var so child threads/processes inherit it
+import os; os.environ.setdefault('PYTHONWARNINGS', 'ignore')
 
 app = Flask(__name__)
 
 uploaded_data = {}
+
+
+def add_derived_features(df):
+    """Auto-engineer features that improve model quality."""
+    import datetime as _dt
+    cy = _dt.datetime.now().year
+    if 'year_built' in df.columns and 'age' not in df.columns:
+        yb = pd.to_numeric(df['year_built'], errors='coerce')
+        df['age'] = (cy - yb).clip(0, 200)
+    if 'lot_size_sqft' in df.columns and 'floor_area_sqft' in df.columns and 'lot_ratio' not in df.columns:
+        fa = pd.to_numeric(df['floor_area_sqft'], errors='coerce').replace(0, np.nan)
+        df['lot_ratio'] = (pd.to_numeric(df['lot_size_sqft'], errors='coerce') / fa).clip(0, 100)
+    if 'rooms' in df.columns and 'floor_area_sqft' in df.columns and 'room_density' not in df.columns:
+        fa = pd.to_numeric(df['floor_area_sqft'], errors='coerce').replace(0, np.nan)
+        df['room_density'] = (pd.to_numeric(df['rooms'], errors='coerce') / fa * 100).clip(0, 10)
+    if 'bathrooms' in df.columns and 'rooms' in df.columns and 'bath_ratio' not in df.columns:
+        rm = pd.to_numeric(df['rooms'], errors='coerce').replace(0, np.nan)
+        df['bath_ratio'] = (pd.to_numeric(df['bathrooms'], errors='coerce') / rm).clip(0, 2)
+    for nc, sc in [('has_view','view'),('has_fireplace','fireplace_features'),
+                   ('has_cooling','cooling_features'),('has_parking_feat','parking_features'),
+                   ('has_appliances','appliances'),('has_interior','interior_features')]:
+        if sc in df.columns and nc not in df.columns:
+            df[nc] = df[sc].fillna('').astype(str).str.strip().str.len().gt(2).astype(float)
+    return df
 
 def clean_dataframe(df):
     """Coerce columns to numeric when >= 80% of values look numeric.
@@ -100,6 +128,7 @@ def upload_csv():
             return jsonify({'error': 'Could not parse CSV file'}), 400
 
         df = clean_dataframe(df)
+        df = add_derived_features(df)
         uploaded_data['default'] = df
 
         # Detect city column heuristically
@@ -458,6 +487,9 @@ def train_model():
             model = LinearRegression()
         elif model_type == 'gradient_boosting':
             model = GradientBoostingRegressor(n_estimators=200, learning_rate=0.1, max_depth=3, random_state=42)
+        elif model_type == 'stacking':
+            from sklearn.ensemble import StackingRegressor
+            model = StackingRegressor(estimators=[('rf',RandomForestRegressor(n_estimators=200,min_samples_leaf=2,random_state=42,n_jobs=-1)),('gb',GradientBoostingRegressor(n_estimators=200,learning_rate=0.1,max_depth=3,random_state=42))],final_estimator=LinearRegression(),cv=5)
         else:
             model = RandomForestRegressor(n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1)
 
@@ -499,10 +531,19 @@ def train_model():
         # Feature importance
         if hasattr(model, 'feature_importances_'):
             importances = model.feature_importances_
-        else:
+        elif hasattr(model, 'estimators_'):
+            # Stacking: average importances from base estimators
+            # sklearn 1.8+: estimators_ is a flat list of fitted estimators
+            est_list = model.estimators_
+            imps = [e.feature_importances_ for e in est_list
+                    if hasattr(e, 'feature_importances_')]
+            importances = np.mean(imps, axis=0) if imps else np.ones(len(feature_cols)) / len(feature_cols)
+        elif hasattr(model, 'coef_'):
             importances = np.abs(model.coef_)
             s = importances.sum() or 1
             importances = importances / s
+        else:
+            importances = np.ones(len(feature_cols)) / len(feature_cols)
 
         feature_importance = sorted(
             [{'feature': col, 'importance': round(float(imp), 4)}
@@ -730,6 +771,12 @@ def build_model(model_type):
         return LinearRegression()
     elif model_type == 'gradient_boosting':
         return GradientBoostingRegressor(n_estimators=200, learning_rate=0.1, max_depth=3, random_state=42)
+    elif model_type == 'stacking':
+        from sklearn.ensemble import StackingRegressor
+        return StackingRegressor(
+            estimators=[('rf', RandomForestRegressor(n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1)),
+                        ('gb', GradientBoostingRegressor(n_estimators=200, learning_rate=0.1, max_depth=3, random_state=42))],
+            final_estimator=LinearRegression(), cv=5)
     return RandomForestRegressor(n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1)
 
 def encode_and_fit(df_seg, feature_cols, target_col, model_type):
@@ -1632,7 +1679,13 @@ def tune_model():
     worker_id  = int(data.get('worker_id', 0))
     n_workers  = int(data.get('n_workers', 1))
     n_jobs          = int(data.get('n_jobs', -1))      # -1 = all CPU cores
-    parallel_combos = max(1, int(data.get('parallel_combos', 1)))  # simultaneous combos
+    ncpu_avail      = _os.cpu_count() or 4
+    # batch_size: how many combos to queue at once (can be large, e.g. 200)
+    # n_threads:  how many run in parallel (capped at CPU cores)
+    batch_size_req  = max(1, int(data.get('parallel_combos', 1)))
+    n_threads       = min(max(1, int(data.get('n_threads', batch_size_req))), ncpu_avail * 2)
+    parallel_combos = n_threads  # kept for backward compat
+    batch_size_par  = batch_size_req  # queue size (user-facing "parallel combos")
     if n_workers < 1: n_workers = 1
     if worker_id >= n_workers: worker_id = 0
 
@@ -1792,52 +1845,66 @@ def tune_model():
             {k:v for k,v in r.items() if k!='r2_raw'} for r in results[:top_n]]
 
     def run_tune():
-        from sklearn.utils.parallel import Parallel as _Parallel, delayed as _delayed
+        from joblib import Parallel as _Parallel, delayed as _delayed
+        import time as _time, warnings as _warn
         import threading as _th
         all_results = []
         lock        = _th.Lock()
 
         ncpu = _os.cpu_count() or 4
-        # Each parallel combo gets ncpu//parallel_combos cores; n_jobs=1 if equal split
-        jobs_per_combo = max(1, ncpu // parallel_combos) if parallel_combos > 1 else (n_jobs if n_jobs != 0 else -1)
+        # n_threads: actual parallel workers (≤ CPU cores)
+        # batch_size_par: how many combos queued per round (can be >> n_threads)
+        # Each thread gets ncpu//n_threads cores per RF
+        jobs_per_combo = max(1, ncpu // n_threads) if n_threads > 1 else (n_jobs if n_jobs != 0 else -1)
         RF_FAST_PAR = {**RF_FAST, 'n_jobs': jobs_per_combo}
 
         def eval_combo(feat_list):
-            """Evaluate one combo — called in parallel via joblib."""
             if _tune_jobs[job_id].get('status') == 'stopped':
                 return feat_list, (None, None)
             return feat_list, quick_cv(feat_list, RF_FAST_PAR)
 
-        # Phase 1: joblib parallel — process all combos in batches
-        # Batches allow live progress updates while keeping full parallelism
-        _tune_jobs[job_id]['phase'] = f'Phase 1/3: fast screening ({parallel_combos} parallel, {jobs_per_combo} CPU/combo)'
-        batch_size = max(parallel_combos, min(50, max(parallel_combos * 5, len(all_combos) // 10)))
-        batches    = [all_combos[i:i+batch_size] for i in range(0, len(all_combos), batch_size)]
+        # Phase 1: send batch_size_par combos per round, execute with n_threads workers
+        _tune_jobs[job_id]['phase'] = f'Phase 1/3: fast screening (batch={batch_size_par}, threads={n_threads}, {jobs_per_combo} CPU each)'
+        _tune_jobs[job_id]['start_time'] = _time.time()
+        batches = [all_combos[i:i+batch_size_par] for i in range(0, len(all_combos), batch_size_par)]
         done = 0
         for batch in batches:
             if _tune_jobs[job_id].get('status') == 'stopped': break
-            batch_res = _Parallel(n_jobs=parallel_combos, prefer='threads')(
-                _delayed(eval_combo)(fl) for fl in batch
-            )
+            with _warn.catch_warnings():
+                _warn.filterwarnings('ignore', category=UserWarning, module='sklearn')
+                batch_res = _Parallel(n_jobs=n_threads, prefer='threads')(
+                    _delayed(eval_combo)(fl) for fl in batch
+                )
             for feat_list, (r2, mae) in batch_res:
                 done += 1
-                _tune_jobs[job_id]['progress'] = done
+                elapsed = _time.time() - _tune_jobs[job_id]['start_time']
+                speed   = done / elapsed if elapsed > 0 else 0
+                remaining = (_tune_jobs[job_id]['total'] - done) / speed if speed > 0 else 0
+                _tune_jobs[job_id]['progress']  = done
+                _tune_jobs[job_id]['eta']        = round(remaining)
+                _tune_jobs[job_id]['speed']      = round(speed, 2)
                 if r2 is None: continue
                 with lock:
                     all_results.append({'features': feat_list, 'n_features': len(feat_list),
                                         'model': RF_FULL['label'], 'r2': round(r2*100,1),
                                         'mae': round(mae,0), 'r2_raw': r2})
-            store(all_results)  # update live results after each batch
+            store(all_results)
 
         # Phase 2: top 40% with full RF (n=200)
         if _tune_jobs[job_id].get('status') != 'stopped':
             _tune_jobs[job_id]['phase'] = 'Phase 2/3: refining top 40% with RF n=200'
+            if 'start_time' not in _tune_jobs[job_id]: _tune_jobs[job_id]['start_time'] = _time.time()
             top_ph2 = [r['features'] for r in
                        sorted(all_results, key=lambda x: x['r2_raw'], reverse=True)[:ph2_size]]
             for feat_list in top_ph2:
                 if _tune_jobs[job_id].get('status') == 'stopped': break
                 r2, mae = quick_cv(feat_list, RF_FULL)
-                done += 1; _tune_jobs[job_id]['progress'] = done
+                done += 1
+                _elapsed = _time.time() - _tune_jobs[job_id].get('start_time', _time.time())
+                _speed   = done / _elapsed if _elapsed > 0 else 0
+                _tune_jobs[job_id]['progress'] = done
+                _tune_jobs[job_id]['eta']       = round((_tune_jobs[job_id]['total'] - done) / _speed) if _speed > 0 else 0
+                _tune_jobs[job_id]['speed']     = round(_speed, 2)
                 if r2 is None: continue
                 # Update result for this feature set
                 for existing in all_results:
@@ -1862,7 +1929,12 @@ def tune_model():
                 for mcfg in [GB_FULL, LIN]:
                     if _tune_jobs[job_id].get('status') == 'stopped': break
                     r2, mae = quick_cv(feat_list, mcfg)
-                    done += 1; _tune_jobs[job_id]['progress'] = done
+                    done += 1
+                    _elapsed = _time.time() - _tune_jobs[job_id].get('start_time', _time.time())
+                    _speed   = done / _elapsed if _elapsed > 0 else 0
+                    _tune_jobs[job_id]['progress'] = done
+                    _tune_jobs[job_id]['eta']       = round((_tune_jobs[job_id]['total'] - done) / _speed) if _speed > 0 else 0
+                    _tune_jobs[job_id]['speed']     = round(_speed, 2)
                     if r2 is None: continue
                     all_results.append({'features': feat_list, 'n_features': len(feat_list),
                                         'model': mcfg['label'], 'r2': round(r2*100,1),
@@ -2027,5 +2099,120 @@ def api_rename_model():
     with open(path,'wb') as f: _pickle.dump(payload, f)
     return jsonify({'success': True})
 
+
+# ── Tune Batch (client-driven) ────────────────────────────────────────────────
+@app.route('/api/tune_batch', methods=['POST'])
+def tune_batch():
+    """
+    Client sends a batch of feature combinations, server evaluates them all
+    in parallel and returns results immediately.
+    No background job needed — client controls the queue.
+    """
+    df = get_working_df()
+    if df is None:
+        return jsonify({'error': 'No data loaded'}), 400
+
+    data             = request.json or {}
+    target_col       = data.get('target_column', 'price')
+    combos           = data.get('combos', [])          # list of feature lists
+    model_type_req   = data.get('model_type', 'rf_fast')  # rf_fast | rf_full | gb | linear
+    use_log          = data.get('use_log_target', True)
+    remove_out       = data.get('remove_outliers', True)
+    n_threads        = min(max(1, int(data.get('n_threads', 1))), (_os.cpu_count() or 4) * 2)
+    n_jobs_per_model = int(data.get('n_jobs', -1))
+
+    if not combos:
+        return jsonify({'results': [], 'n': 0})
+
+    MODEL_CFGS = {
+        'rf_fast': {'model': 'random_forest',     'n_estimators': 30,  'min_samples_leaf': 3,
+                    'n_jobs': max(1, (_os.cpu_count() or 4) // max(n_threads, 1)), 'label': 'Random Forest'},
+        'rf_full': {'model': 'random_forest',     'n_estimators': 200, 'min_samples_leaf': 2,
+                    'n_jobs': max(1, (_os.cpu_count() or 4) // max(n_threads, 1)), 'label': 'Random Forest'},
+        'gb':      {'model': 'gradient_boosting', 'n_estimators': 200, 'learning_rate': 0.1,
+                    'max_depth': 3, 'label': 'Grad. Boosting'},
+        'gb_deep': {'model': 'gradient_boosting', 'n_estimators': 300, 'learning_rate': 0.05,
+                    'max_depth': 4, 'subsample': 0.8, 'min_samples_leaf': 3, 'label': 'GB deep'},
+        'stacking':{'model': 'stacking', 'label': 'Stacking'},
+        'linear':  {'model': 'linear', 'label': 'Linear'},
+    }
+    mcfg = MODEL_CFGS.get(model_type_req, MODEL_CFGS['rf_fast'])
+
+    # Inline quick_cv (same logic as tune_model)
+    def _quick_cv(feat_list):
+        try:
+            # Use full df for target encoding (includes sqft for ppsf) then slice to feat_list rows
+            cols_needed = [c for c in feat_list if c in df.columns]
+            df_m = df[cols_needed + [target_col]].dropna(subset=[target_col]).reset_index(drop=True)
+            df_m[target_col] = pd.to_numeric(df_m[target_col], errors='coerce')
+            df_m = df_m.dropna(subset=[target_col]).reset_index(drop=True)
+            if len(df_m) < 8: return feat_list, None, None
+            y = df_m[target_col].values.astype(float)
+            if remove_out:
+                q1,q3 = np.percentile(y,25),np.percentile(y,75)
+                m = (y>=q1-3*(q3-q1))&(y<=q3+3*(q3-q1))
+                df_m,y = df_m[m].reset_index(drop=True),y[m]
+            if len(df_m) < 8: return feat_list, None, None
+            y_fit = np.log1p(y) if (use_log and np.all(y>0)) else y
+            X_parts = []
+            for col in feat_list:
+                if col not in df_m.columns: continue
+                cd = df_m[col].copy()
+                if not pd.api.types.is_numeric_dtype(cd):
+                    cd = cd.fillna('Unknown')
+                    if is_multi_value_col(cd):
+                        arr, _ = ohe_multi_value(cd)
+                        X_parts.append(arr)
+                    elif cd.nunique() > 15:
+                        # Use same target_encode as train_model (includes ppsf)
+                        enc_med, enc_ppsf, _ = target_encode(df_m.assign(**{col: cd}), col, target_col)
+                        X_parts.append(enc_med.values.reshape(-1,1))
+                        if enc_ppsf is not None:
+                            X_parts.append(enc_ppsf.values.reshape(-1,1))
+                    else:
+                        le = LabelEncoder()
+                        X_parts.append(le.fit_transform(cd.astype(str)).reshape(-1,1).astype(float))
+                else:
+                    num = pd.to_numeric(cd, errors='coerce')
+                    X_parts.append(num.fillna(num.median() if num.notna().any() else 0).values.reshape(-1,1))
+            if not X_parts: return feat_list, None, None
+            X = np.hstack(X_parts).astype(float)
+            mt = mcfg['model']
+            if mt == 'random_forest':
+                mdl = RandomForestRegressor(n_estimators=mcfg.get('n_estimators',30),
+                        min_samples_leaf=mcfg.get('min_samples_leaf',3),
+                        n_jobs=mcfg.get('n_jobs',-1), random_state=42)
+            elif mt == 'gradient_boosting':
+                mdl = GradientBoostingRegressor(n_estimators=mcfg.get('n_estimators',200),
+                        learning_rate=mcfg.get('learning_rate',0.1), max_depth=mcfg.get('max_depth',3),
+                        subsample=mcfg.get('subsample',1.0), min_samples_leaf=mcfg.get('min_samples_leaf',1),
+                        random_state=42)
+            elif mt == 'stacking':
+                from sklearn.ensemble import StackingRegressor
+                mdl = StackingRegressor(estimators=[('rf',RandomForestRegressor(n_estimators=100,min_samples_leaf=2,random_state=42,n_jobs=1)),('gb',GradientBoostingRegressor(n_estimators=100,learning_rate=0.1,max_depth=3,random_state=42))],final_estimator=LinearRegression(),cv=3)
+            else:
+                mdl = LinearRegression()
+            n_sp = min(5, max(2, len(y)//5))
+            cv   = KFold(n_splits=n_sp, shuffle=True, random_state=42)
+            preds = cross_val_predict(mdl, X, y_fit, cv=cv)
+            if use_log and np.all(y>0): preds = np.expm1(preds)
+            return feat_list, round(float(r2_score(y,preds))*100,1), round(float(mean_absolute_error(y,preds)),0)
+        except Exception:
+            return feat_list, None, None
+
+    from joblib import Parallel as _P, delayed as _d
+    import warnings as _w
+    with _w.catch_warnings():
+        _w.filterwarnings('ignore')
+        raw = _P(n_jobs=n_threads, prefer='threads')(_d(_quick_cv)(fl) for fl in combos)
+
+    results = [{'features': fl, 'n_features': len(fl),
+                'model': mcfg['label'], 'r2': r2, 'mae': mae}
+               for fl, r2, mae in raw if r2 is not None]
+    ncpu = _os.cpu_count() or 1
+    jobs_info = f'{n_threads} threads x {max(1, ncpu//max(n_threads,1))} cores each = {min(n_threads * max(1, ncpu//max(n_threads,1)), ncpu)} of {ncpu} cores'
+    return jsonify({'results': results, 'n': len(combos), 'evaluated': len(results), 'cpu_info': jobs_info})
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    from waitress import serve
+    serve(app, host='127.0.0.1', port=5000, threads=8)
