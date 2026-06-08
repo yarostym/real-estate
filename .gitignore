@@ -1,4 +1,5 @@
 data/
+tune_cache/
 saved_models/
 venv/
 __pycache__/
