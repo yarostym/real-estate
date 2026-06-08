@@ -1,0 +1,1 @@
+[{"features": ["district", "cooling_features", "appliances", "view"], "n_features": 4, "model": "Random Forest", "r2": 75.5, "mae": 328810.0}, {"features": ["district", "fireplace_features", "appliances", "view"], "n_features": 4, "model": "Random Forest", "r2": 75.3, "mae": 332310.0}]

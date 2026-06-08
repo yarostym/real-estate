@@ -18,6 +18,35 @@ import os; os.environ.setdefault('PYTHONWARNINGS', 'ignore')
 app = Flask(__name__)
 
 uploaded_data = {}
+_excluded_sources = set()  # sources excluded via file manager
+
+# ── Auto-load from data/ads and data/sold on startup ─────────────────────────
+def _autoload_data_folders():
+    import glob as _glob, datetime as _dt
+    base = _os.path.dirname(_os.path.abspath(__file__))
+    ads_dir  = _os.path.join(base, 'data', 'ads')
+    sold_dir = _os.path.join(base, 'data', 'sold')
+    frames = []
+    for folder, ftype, weight in [(ads_dir,'listings',1.0),(sold_dir,'sold',3.0)]:
+        if not _os.path.isdir(folder): continue
+        for fpath in sorted(_glob.glob(_os.path.join(folder,'*.csv'))):
+            try:
+                with open(fpath,'rb') as f: raw = f.read()
+                try:    df_f = pd.read_csv(io.BytesIO(raw), encoding='utf-8', sep=None, engine='python')
+                except: df_f = pd.read_csv(io.BytesIO(raw), encoding='latin-1', sep=None, engine='python')
+                df_f = clean_dataframe(df_f)
+                df_f = add_derived_features(df_f)
+                df_f['_source']        = f'{ftype}/{_os.path.basename(fpath)}'
+                df_f['_file_type']     = ftype
+                df_f['_sample_weight'] = weight
+                frames.append(df_f)
+            except Exception as e:
+                print(f'[autoload] skipped {fpath}: {e}')
+    if frames:
+        merged = pd.concat(frames, ignore_index=True, sort=False)
+        uploaded_data['default'] = merged
+        print(f'[autoload] loaded {len(merged)} rows from {len(frames)} files')
+
 
 
 def add_derived_features(df):
@@ -59,11 +88,13 @@ def clean_dataframe(df):
             df[col] = converted
     return df
 
+_INTERNAL_COLS = {'_source', '_file_type', '_sample_weight'}
+
 def get_numeric_columns(df):
-    return df.select_dtypes(include=[np.number]).columns.tolist()
+    return [c for c in df.select_dtypes(include=[np.number]).columns if c not in _INTERNAL_COLS]
 
 def get_categorical_columns(df):
-    return df.select_dtypes(exclude=[np.number]).columns.tolist()
+    return [c for c in df.select_dtypes(exclude=[np.number]).columns if c not in _INTERNAL_COLS]
 
 def correlation_strength(val):
     if val >= 0.9: return 'very strong'
@@ -108,6 +139,21 @@ def get_nearby_cities(city):
     return CITY_GROUPS.get(city, [city])
 
 # ── Upload ────────────────────────────────────────────────────────────────────
+@app.route('/api/toggle_demo', methods=['POST'])
+def toggle_demo():
+    uploaded_data['demo_mode'] = not uploaded_data.get('demo_mode', False)
+    return jsonify({'demo_mode': uploaded_data['demo_mode']})
+
+def mask_row(row):
+    if not uploaded_data.get('demo_mode'): return row
+    masked = dict(row)
+    for k in list(masked.keys()):
+        kl = k.lower()
+        if any(x in kl for x in ['street','address','url','link','mls','agent','brokerage','phone','email','tour']):
+            if isinstance(masked[k], str) and masked[k]:
+                masked[k] = 'HIDDEN'
+    return masked
+
 @app.route('/api/upload', methods=['POST'])
 def upload_csv():
     if 'file' not in request.files:
@@ -194,10 +240,13 @@ def upload_csv():
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 def get_working_df():
-    """Return df filtered by global_filters dict."""
+    """Return df filtered by global_filters dict and excluded sources."""
     df = uploaded_data.get("default")
     if df is None:
         return None
+    # Exclude toggled-off source files
+    if _excluded_sources and '_source' in df.columns:
+        df = df[~df['_source'].isin(_excluded_sources)].reset_index(drop=True)
     filters = uploaded_data.get('global_filters', {})
     for col, val in filters.items():
         if not val or col not in df.columns:
@@ -379,8 +428,9 @@ def train_model():
 
     if not target_col:
         return jsonify({'error': 'No target column selected'}), 400
-    # Strip target_col from features to prevent duplicate columns in df_model
-    feature_cols = [c for c in feature_cols if c != target_col]
+    # Strip target_col and internal columns from features
+    _internal = {'_source', '_file_type', '_sample_weight'}
+    feature_cols = [c for c in feature_cols if c != target_col and c not in _internal]
     if not feature_cols:
         return jsonify({'error': 'No feature columns selected'}), 400
 
@@ -602,7 +652,11 @@ def train_model():
         })
     except Exception as e:
         import traceback
-        return jsonify({'error': f'Training error: {str(e)}', 'trace': traceback.format_exc()}), 400
+        tb = traceback.format_exc()
+        # Find the most useful line from traceback
+        lines = [l.strip() for l in tb.split('\n') if l.strip() and 'File' not in l and 'Traceback' not in l]
+        detail = lines[-2] if len(lines) >= 2 else str(e)
+        return jsonify({'error': f'Training error: {str(e)}', 'detail': detail, 'trace': tb}), 400
 
 # ── Predict ───────────────────────────────────────────────────────────────────
 @app.route('/api/predict', methods=['POST'])
@@ -1135,6 +1189,16 @@ def undervalued():
         gap     = y_pred - y_actual          # positive = undervalued (actual < predicted)
         gap_pct = gap / y_pred * 100
 
+        # Prediction stability: std of individual tree predictions (RF only)
+        pred_cv = np.zeros(len(X))   # coefficient of variation per row
+        _m = model_data.get('model')
+        if hasattr(_m, 'estimators_'):
+            _tree_preds = np.array([t.predict(X) for t in _m.estimators_])  # shape (n_trees, n_rows)
+            if use_log: _tree_preds = np.expm1(_tree_preds)
+            _std  = _tree_preds.std(axis=0)
+            _mean = np.abs(_tree_preds.mean(axis=0)) + 1
+            pred_cv = _std / _mean  # lower = more stable
+
         # Compute confidence: how many training rows share the same district/city
         df_train = get_working_df()
         city_col_name = uploaded_data.get('city_col', 'city')
@@ -1157,6 +1221,10 @@ def undervalued():
             n_city = city_counts.get(city, 0)
             # Confidence: low if very few comparable listings in training data
             confidence = 'high' if n_dist >= 10 else 'medium' if n_dist >= 4 else 'low'
+            cv_i = float(pred_cv[i])
+            if   cv_i < 0.05: stability = 'stable'
+            elif cv_i < 0.12: stability = 'moderate'
+            else:              stability = 'unstable'
             row = {
                 'actual':     round(float(y_actual[i]), 0),
                 'predicted':  round(float(y_pred[i]), 0),
@@ -1165,10 +1233,12 @@ def undervalued():
                 'confidence': confidence,
                 'n_district': n_dist,
                 'n_city':     n_city,
+                'stability':  stability,
+                'pred_cv':    round(cv_i * 100, 1),
             }
             for c in display_cols:
                 row[c] = str(df_score[c].iloc[i]) if c in df_score.columns else ''
-            rows.append(row)
+            rows.append(mask_row(row))
 
         # Filter by confidence level
         min_confidence = data.get('min_confidence', 'medium')
@@ -2124,11 +2194,15 @@ def tune_batch():
     if not combos:
         return jsonify({'results': [], 'n': 0})
 
+    _ncpu  = _os.cpu_count() or 4
+    # Auto n_threads: use batch_size as thread count, capped at ncpu
+    n_threads = min(max(1, n_threads), _ncpu)
+    _jpm   = max(1, _ncpu // n_threads)  # cores per model
     MODEL_CFGS = {
         'rf_fast': {'model': 'random_forest',     'n_estimators': 30,  'min_samples_leaf': 3,
-                    'n_jobs': max(1, (_os.cpu_count() or 4) // max(n_threads, 1)), 'label': 'Random Forest'},
+                    'n_jobs': _jpm, 'label': 'Random Forest'},
         'rf_full': {'model': 'random_forest',     'n_estimators': 200, 'min_samples_leaf': 2,
-                    'n_jobs': max(1, (_os.cpu_count() or 4) // max(n_threads, 1)), 'label': 'Random Forest'},
+                    'n_jobs': _jpm, 'label': 'Random Forest'},
         'gb':      {'model': 'gradient_boosting', 'n_estimators': 200, 'learning_rate': 0.1,
                     'max_depth': 3, 'label': 'Grad. Boosting'},
         'gb_deep': {'model': 'gradient_boosting', 'n_estimators': 300, 'learning_rate': 0.05,
@@ -2196,9 +2270,25 @@ def tune_batch():
             cv   = KFold(n_splits=n_sp, shuffle=True, random_state=42)
             preds = cross_val_predict(mdl, X, y_fit, cv=cv)
             if use_log and np.all(y>0): preds = np.expm1(preds)
-            return feat_list, round(float(r2_score(y,preds))*100,1), round(float(mean_absolute_error(y,preds)),0)
+            # Fit once on full data to get feature importances
+            imps = None
+            try:
+                mdl.fit(X, y_fit)
+                if hasattr(mdl, 'feature_importances_'):
+                    raw_imp = mdl.feature_importances_
+                elif hasattr(mdl, 'estimators_'):
+                    ies = [e.feature_importances_ for e in mdl.estimators_ if hasattr(e,'feature_importances_')]
+                    raw_imp = np.mean(ies, axis=0) if ies else None
+                else:
+                    raw_imp = None
+                if raw_imp is not None:
+                    s = raw_imp.sum() or 1
+                    imps = {feat_list[j]: round(float(raw_imp[j]/s*100), 1) for j in range(len(feat_list))}
+            except Exception:
+                imps = None
+            return feat_list, round(float(r2_score(y,preds))*100,1), round(float(mean_absolute_error(y,preds)),0), imps
         except Exception:
-            return feat_list, None, None
+            return feat_list, None, None, None
 
     from joblib import Parallel as _P, delayed as _d
     import warnings as _w
@@ -2207,12 +2297,337 @@ def tune_batch():
         raw = _P(n_jobs=n_threads, prefer='threads')(_d(_quick_cv)(fl) for fl in combos)
 
     results = [{'features': fl, 'n_features': len(fl),
-                'model': mcfg['label'], 'r2': r2, 'mae': mae}
-               for fl, r2, mae in raw if r2 is not None]
+                'model': mcfg['label'], 'r2': r2, 'mae': mae,
+                'importance': imps or {}}
+               for fl, r2, mae, imps in raw if r2 is not None]
     ncpu = _os.cpu_count() or 1
-    jobs_info = f'{n_threads} threads x {max(1, ncpu//max(n_threads,1))} cores each = {min(n_threads * max(1, ncpu//max(n_threads,1)), ncpu)} of {ncpu} cores'
+    jobs_info = f'{n_threads} threads × {_jpm} cores each = {min(n_threads*_jpm,_ncpu)}/{_ncpu} cores used'
+    # Cache results for reuse across restarts
+    df_w = get_working_df()
+    if df_w is not None:
+        _ck = _tune_cache_key(df_w, combos, model_type_req, use_log, remove_out)
+        cached = _tune_cache_read(_ck)
+        if cached is not None:
+            # Return cached — but only the combos that match this request
+            feat_keys = {tuple(sorted(c)) for c in combos}
+            cached_results = [r for r in cached if tuple(sorted(r['features'])) in feat_keys]
+            if len(cached_results) == len(combos):
+                return jsonify({'results': cached_results, 'n': len(combos),
+                               'evaluated': len(cached_results), 'cached': True,
+                               'cpu_info': 'cached result'})
+        _tune_cache_write(_ck, results)
     return jsonify({'results': results, 'n': len(combos), 'evaluated': len(results), 'cpu_info': jobs_info})
 
+
+# ── Tuning Cache ──────────────────────────────────────────────────────────────
+import hashlib as _hashlib, json as _json
+
+def _tune_cache_key(df, combos, model_type, use_log, remove_outliers):
+    """Hash of: data fingerprint + sorted combos + model params."""
+    data_fp = str(len(df)) + '|' + '|'.join(sorted(df.columns))
+    combos_fp = _json.dumps(sorted([sorted(c) for c in combos]))
+    raw = f"{data_fp}|{combos_fp}|{model_type}|{use_log}|{remove_outliers}"
+    return _hashlib.md5(raw.encode()).hexdigest()[:16]
+
+def _tune_cache_path(key):
+    cache_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'tune_cache')
+    _os.makedirs(cache_dir, exist_ok=True)
+    return _os.path.join(cache_dir, f'{key}.json')
+
+def _tune_cache_read(key):
+    path = _tune_cache_path(key)
+    if _os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return _json.load(f)
+        except Exception:
+            pass
+    return None
+
+def _tune_cache_write(key, results):
+    try:
+        with open(_tune_cache_path(key), 'w', encoding='utf-8') as f:
+            _json.dump(results, f)
+    except Exception:
+        pass
+
+
+@app.route('/api/typical_values', methods=['POST'])
+def typical_values():
+    """Return median/mode for each feature column — used in Predict Price form hints."""
+    df = get_working_df()
+    if df is None:
+        return jsonify({'error': 'No data'}), 400
+    data = request.json or {}
+    feature_cols = data.get('feature_cols', [])
+    target_col   = data.get('target_col', 'price')
+    result = {}
+    for col in feature_cols:
+        if col not in df.columns:
+            continue
+        series = df[col].dropna()
+        if len(series) == 0:
+            continue
+        if pd.api.types.is_numeric_dtype(series):
+            result[col] = {
+                'type': 'numeric',
+                'median': round(float(series.median()), 2),
+                'mean':   round(float(series.mean()), 2),
+                'min':    round(float(series.min()), 2),
+                'max':    round(float(series.max()), 2),
+                'p25':    round(float(series.quantile(0.25)), 2),
+                'p75':    round(float(series.quantile(0.75)), 2),
+            }
+        else:
+            vc = series.astype(str).value_counts()
+            result[col] = {
+                'type':     'categorical',
+                'mode':     vc.index[0] if len(vc) else '',
+                'top3':     vc.head(3).index.tolist(),
+                'n_unique': int(series.nunique()),
+            }
+    # Also return most common full row (row closest to median price)
+    if target_col in df.columns:
+        target_num = pd.to_numeric(df[target_col], errors='coerce').dropna()
+        median_price = float(target_num.median())
+        df_c = df.copy()
+        df_c['_dist'] = (pd.to_numeric(df_c[target_col], errors='coerce') - median_price).abs()
+        typical_row = df_c.nsmallest(1, '_dist')
+        if len(typical_row):
+            row_vals = {}
+            for col in feature_cols:
+                if col in typical_row.columns:
+                    v = typical_row[col].iloc[0]
+                    row_vals[col] = '' if pd.isna(v) else (round(float(v), 2) if pd.api.types.is_numeric_dtype(df[col]) else str(v))
+            result['_typical_row'] = row_vals
+    return jsonify(result)
+
+
+@app.route('/api/upload_extra', methods=['POST'])
+def upload_extra():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file'}), 400
+    file  = request.files['file']
+    ftype = request.form.get('file_type', 'listings')
+    weight = float(request.form.get('weight', 3.0 if ftype=='sold' else 1.0))
+    try:
+        cb = file.read()
+        try:    new_df = pd.read_csv(io.BytesIO(cb), encoding='utf-8', sep=None, engine='python')
+        except: new_df = pd.read_csv(io.BytesIO(cb), encoding='latin-1', sep=None, engine='python')
+        new_df = clean_dataframe(new_df)
+        new_df = add_derived_features(new_df)
+        new_df['_source']        = file.filename
+        new_df['_file_type']     = ftype
+        new_df['_sample_weight'] = weight
+        existing = uploaded_data.get('default')
+        if existing is None:
+            uploaded_data['default'] = new_df
+        else:
+            if '_source' not in existing.columns:
+                existing = existing.copy()
+                existing['_source']        = 'primary'
+                existing['_file_type']     = 'listings'
+                existing['_sample_weight'] = 1.0
+                uploaded_data['default']   = existing
+            merged = pd.concat([existing, new_df], ignore_index=True, sort=False)
+            uploaded_data['default'] = merged
+        df = uploaded_data['default']
+        num_cols  = [c for c in df.select_dtypes(include=[np.number]).columns
+                     if c not in ['listing_id','_sample_weight']]
+        cat_cols  = [c for c in df.select_dtypes(exclude=[np.number]).columns
+                     if c not in ['_source','_file_type'] and df[c].nunique() <= 200]
+        files_summary = df['_source'].value_counts().to_dict() if '_source' in df.columns else {}
+        return jsonify({'success': True, 'rows': int(len(df)), 'new_rows': int(len(new_df)),
+                        'file_type': ftype, 'files': files_summary,
+                        'numeric_columns': num_cols, 'categorical_columns': cat_cols})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/overvalued', methods=['POST'])
+def overvalued():
+    data       = request.json or {}
+    df         = get_working_df()
+    model_data = uploaded_data.get('default_model')
+    if df is None or not model_data:
+        return jsonify({'error': 'No data or model'}), 400
+    top_n        = int(data.get('top_n', 50))
+    min_over_pct = float(data.get('min_over_pct', 5))
+    city_filter  = data.get('city', '')
+    prop_filter  = data.get('property_type', '')
+    target_col   = model_data['target_col']
+    feature_cols = model_data['feature_cols']
+    encoders     = model_data['encoders']
+    use_log      = model_data.get('use_log', True)
+    model        = model_data['model']
+
+    df_score = df.copy()
+    df_score[target_col] = pd.to_numeric(df_score[target_col], errors='coerce')
+    df_score = df_score.dropna(subset=[target_col]).reset_index(drop=True)
+    # Remove price outliers before scoring
+    y_raw = df_score[target_col].values.astype(float)
+    q1,q3 = np.percentile(y_raw,25), np.percentile(y_raw,75)
+    df_score = df_score[(y_raw>=q1-3*(q3-q1))&(y_raw<=q3+3*(q3-q1))].reset_index(drop=True)
+    if city_filter and 'city' in df_score.columns:
+        df_score = df_score[df_score['city'].astype(str)==city_filter].reset_index(drop=True)
+    if prop_filter and 'property_type' in df_score.columns:
+        df_score = df_score[df_score['property_type'].astype(str)==prop_filter].reset_index(drop=True)
+    if len(df_score) == 0: return jsonify({'listings':[],'total':0})
+
+    X_cols = []
+    for col in feature_cols:
+        col_data = df_score[col] if col in df_score.columns else pd.Series(['Unknown']*len(df_score))
+        enc = encoders.get(col, {})
+        enc_type = enc.get('type','numeric')
+        if enc_type == 'multi_ohe':
+            arr, _ = ohe_multi_value(col_data, existing_values=enc.get('values',[]))
+            for k in range(arr.shape[1]): X_cols.append(arr[:,k])
+            continue
+        elif enc_type == 'target_encoded':
+            te = model_data.get('_te_stats',{}).get(col)
+            if te:
+                X_cols.append(col_data.map(te['median']).fillna(te['global_median']).astype(float).values)
+                if te.get('ppsf'):
+                    X_cols.append(col_data.map(te['ppsf']).fillna(te['global_median']/1000).astype(float).values)
+            else:
+                X_cols.append(np.zeros(len(df_score)))
+        elif enc_type == 'categorical':
+            X_cols.append(col_data.astype(str).map({c:i for i,c in enumerate(enc['classes'])}).fillna(0).astype(float).values)
+        else:
+            num = pd.to_numeric(col_data, errors='coerce')
+            X_cols.append(num.fillna(enc.get('mean',0)).values.astype(float))
+    if not X_cols: return jsonify({'listings':[],'total':0})
+    X = np.column_stack(X_cols) if len(X_cols)>1 else X_cols[0].reshape(-1,1)
+    y_pred_raw = model.predict(X)
+    y_pred   = np.expm1(y_pred_raw) if use_log else y_pred_raw
+    y_actual = df_score[target_col].values.astype(float)
+    gap      = y_actual - y_pred
+    gap_pct  = gap / np.maximum(y_pred, 1) * 100
+
+    pred_cv = np.zeros(len(X))
+    if hasattr(model, 'estimators_'):
+        tp = np.array([t.predict(X) for t in model.estimators_])
+        if use_log: tp = np.expm1(tp)
+        pred_cv = tp.std(axis=0) / (np.abs(tp.mean(axis=0))+1)
+
+    df_train = get_working_df()
+    dist_counts = df_train['district'].value_counts().to_dict() if df_train is not None and 'district' in df_train.columns else {}
+    disp = [c for c in ['street','district','city','real_mls','property_type','bedrooms','bathrooms','floor_area_sqft','summary_url','year_built'] if c in df_score.columns]
+    rows = []
+    for i in range(len(df_score)):
+        if gap_pct[i] < min_over_pct: continue
+        dist   = str(df_score['district'].iloc[i]) if 'district' in df_score.columns else ''
+        n_dist = dist_counts.get(dist, 0)
+        conf   = 'high' if n_dist>=10 else 'medium' if n_dist>=4 else 'low'
+        cv_i   = float(pred_cv[i])
+        stab   = 'stable' if cv_i<0.05 else 'moderate' if cv_i<0.12 else 'unstable'
+        row    = {'actual':round(float(y_actual[i]),0),'predicted':round(float(y_pred[i]),0),
+                  'gap':round(float(gap[i]),0),'gap_pct':round(float(gap_pct[i]),1),
+                  'confidence':conf,'n_district':n_dist,'stability':stab,'pred_cv':round(cv_i*100,1)}
+        for c in disp: row[c] = str(df_score[c].iloc[i]) if c in df_score.columns else ''
+        rows.append(mask_row(row))
+    rows = sorted(rows, key=lambda x: -x['gap_pct'])[:top_n]
+    return jsonify({'listings': rows, 'total': len(rows)})
+
+
+# ── File manager ──────────────────────────────────────────────────────────────
+@app.route('/api/files', methods=['GET'])
+def list_files():
+    df = uploaded_data.get('default')
+    if df is None: return jsonify({'files': [], 'total_rows': 0})
+    if '_source' not in df.columns:
+        return jsonify({'files': [{'name':'primary','rows':len(df),'type':'listings','weight':1.0,'excluded':False}], 'total_rows': len(df)})
+    files = []
+    for src in df['_source'].unique():
+        grp    = df[df['_source']==src]
+        ftype  = str(grp['_file_type'].iloc[0])  if '_file_type'  in grp.columns else 'listings'
+        weight = float(grp['_sample_weight'].iloc[0]) if '_sample_weight' in grp.columns else 1.0
+        files.append({'name':src,'rows':len(grp),'type':ftype,'weight':weight,'excluded':src in _excluded_sources})
+    active = df[~df['_source'].isin(_excluded_sources)] if _excluded_sources else df
+    return jsonify({'files': files, 'total_rows': len(active)})
+
+@app.route('/api/files/toggle', methods=['POST'])
+def toggle_file():
+    src = (request.json or {}).get('source','')
+    if src in _excluded_sources: _excluded_sources.discard(src)
+    else: _excluded_sources.add(src)
+    return jsonify({'excluded': src in _excluded_sources, 'source': src})
+
+@app.route('/api/files/remove', methods=['POST'])
+def remove_file():
+    src = (request.json or {}).get('source','')
+    df = uploaded_data.get('default')
+    if df is not None and '_source' in df.columns:
+        uploaded_data['default'] = df[df['_source']!=src].reset_index(drop=True)
+    _excluded_sources.discard(src)
+    return jsonify({'success':True})
+
+@app.route('/api/files/set_weight', methods=['POST'])
+def set_file_weight():
+    data = request.json or {}
+    src, weight = data.get('source',''), float(data.get('weight',1.0))
+    df = uploaded_data.get('default')
+    if df is not None and '_source' in df.columns:
+        df.loc[df['_source']==src,'_sample_weight'] = weight
+        uploaded_data['default'] = df
+    return jsonify({'success':True})
+
+
+@app.route('/api/upload_meta', methods=['GET'])
+def upload_meta():
+    """Return column metadata for already-loaded data (no file needed)."""
+    df = uploaded_data.get('default')
+    if df is None:
+        return jsonify({'error': 'No data loaded'}), 400
+    df = add_derived_features(df)
+    uploaded_data['default'] = df
+    numeric_cols     = get_numeric_columns(df)
+    categorical_cols = get_categorical_columns(df)
+    null_rates       = {c: round(float(df[c].isna().mean()), 3) for c in df.columns}
+    city_col         = next((c for c in ['city','City','municipality'] if c in df.columns), None)
+    uploaded_data['city_col'] = city_col or 'city'
+    city_to_districts = {}
+    if city_col and 'district' in df.columns:
+        for city, grp in df.groupby(city_col):
+            city_to_districts[str(city)] = sorted(grp['district'].dropna().unique().tolist())
+    cat_filter_cols = {}
+    for col in categorical_cols:
+        skip = ['real_mls','mls','street','address','summary_url','virtual_tour',
+                '_source','_file_type','listing_id']
+        if col in skip: continue
+        vals = df[col].dropna().astype(str).unique().tolist()
+        if 2 <= len(vals) <= 50:
+            cat_filter_cols[col] = sorted(vals)
+    preview = df.head(5).replace({float('nan'): None}).to_dict(orient='records')
+    cities = df[city_col].dropna().unique().tolist() if city_col and city_col in df.columns else []
+    cat_n_unique = {c: int(df[c].nunique()) for c in categorical_cols}
+    return jsonify({
+        'rows':              int(len(df)),
+        'columns':           int(df.shape[1]),
+        'all_columns':       df.columns.tolist(),
+        'numeric_columns':   numeric_cols,
+        'categorical_columns': categorical_cols,
+        'null_rates':        null_rates,
+        'city_to_districts': city_to_districts,
+        'cat_filter_cols':   cat_filter_cols,
+        'cat_n_unique':      cat_n_unique,
+        'city_col':          city_col,
+        'cities':            cities,
+        'preview':           preview,
+    })
+
+# Auto-load data folders on first request
+_autoloaded = False
+
+@app.before_request
+def autoload_once():
+    global _autoloaded
+    if not _autoloaded:
+        _autoloaded = True
+        try:
+            _autoload_data_folders()
+        except Exception as _e:
+            print(f'[autoload] failed: {_e}')
+
 if __name__ == '__main__':
-    from waitress import serve
-    serve(app, host='127.0.0.1', port=5000, threads=8)
+    app.run(debug=True, port=5000)

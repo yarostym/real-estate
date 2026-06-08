@@ -538,11 +538,16 @@
     <button class="tab-btn" onclick="switchPage('impact')">Category Impact</button>
     <button class="tab-btn" onclick="switchPage('segment')">Segment Models</button>
     <button class="tab-btn" onclick="switchPage('undervalued')">Undervalued 🔍</button>
+    <button class="tab-btn" onclick="switchPage('overvalued')">Overvalued 📈</button>
     <button class="tab-btn" onclick="switchPage('tuning')">Tuning ⚙️</button>
   </div>
   <div class="status-bar">
     <div class="status-dot" id="status-dot"></div>
     <span id="status-text">No data loaded</span>
+    <button id="demo-btn" onclick="toggleDemo()"
+            style="margin-left:auto;padding:3px 10px;font-size:11px;background:transparent;border:1px solid var(--border2);border-radius:6px;color:var(--text3);cursor:pointer;white-space:nowrap">
+      Demo: OFF
+    </button>
   </div>
 </header>
 
@@ -590,6 +595,26 @@
         <div class="upload-sub">or click to browse</div>
       </div>
     </label>
+
+    <!-- File Manager -->
+    <div id="file-manager" style="margin-top:10px;display:none">
+      <div class="section-label" style="display:flex;align-items:center;justify-content:space-between">
+        Loaded Files
+        <span style="display:flex;gap:4px">
+          <select id="extra-file-type" style="padding:3px 6px;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:10px">
+            <option value="listings">Listing ×1</option>
+            <option value="sold">Sold ×3</option>
+          </select>
+          <input type="file" id="extra-file-input" accept=".csv" style="display:none" onchange="uploadExtraFile()">
+          <button onclick="document.getElementById('extra-file-input').click()"
+                  style="padding:3px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;cursor:pointer;font-size:10px;color:var(--text2)">
+            + CSV
+          </button>
+        </span>
+      </div>
+      <div id="file-manager-list" style="margin-top:6px"></div>
+      <div id="file-manager-total" style="font-size:10px;color:var(--text3);margin-top:4px"></div>
+    </div>
 
     <div id="corr-controls" style="display:none">
       <div class="section-label">Focus Column</div>
@@ -688,11 +713,15 @@
 
       <div class="section-label" style="display:flex;align-items:center;justify-content:space-between">
         Feature Columns
-        <span style="display:flex;gap:4px">
+        <span style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
           <button onclick="saveFeaturePreset()" title="Save current selection"
-                  style="padding:2px 8px;font-size:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text2);cursor:pointer">💾 Save</button>
+                  style="padding:2px 8px;font-size:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text2);cursor:pointer">💾</button>
           <button onclick="restoreFeaturePreset()" title="Restore saved selection"
-                  style="padding:2px 8px;font-size:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text2);cursor:pointer">↩ Restore</button>
+                  style="padding:2px 8px;font-size:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text2);cursor:pointer">↩</button>
+          <button onclick="exportSettings()" title="Export all settings as text"
+                  style="padding:2px 8px;font-size:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text2);cursor:pointer">📤</button>
+          <button onclick="importSettings()" title="Import settings from text"
+                  style="padding:2px 8px;font-size:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--text2);cursor:pointer">📥</button>
         </span>
       </div>
       <div class="checkbox-list" id="pred-feature-list"></div>
@@ -779,6 +808,12 @@
         </div>
       </div>
 
+      <!-- Most common Tuning combo hint -->
+      <div id="pred-common-combo" style="display:none;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:16px">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-family:var(--mono);letter-spacing:.08em;margin-bottom:4px">Most frequent tuning configuration</div>
+        <div id="pred-common-combo-text" style="font-size:11px;color:var(--text2)"></div>
+      </div>
+
       <div class="panel">
         <div class="panel-title">Feature Importance <span>(impact on price)</span></div>
         <div id="importance-bars"></div>
@@ -817,9 +852,14 @@
 
       <div class="panel">
         <div class="predict-grid" id="predict-inputs"></div>
-        <button class="btn-primary" onclick="runPrediction()" style="max-width:200px; margin-top:16px;">
-          Calculate Price
-        </button>
+        <div style="display:flex;gap:8px;margin-top:16px;align-items:center">
+          <button class="btn-primary" onclick="runPrediction()" style="flex:1;margin:0">
+            Calculate Price
+          </button>
+          <button id="fill-typical-btn" style="display:none;padding:8px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:11px;color:var(--text2)" title="Fill with typical values from training data">
+            Fill typical
+          </button>
+        </div>
 
         <div class="prediction-result" id="prediction-result">
           <div class="prediction-label" id="pred-target-label">Predicted Price</div>
@@ -1102,6 +1142,55 @@
   </div>
 </div>
 
+<!-- =================== OVERVALUED PAGE =================== -->
+<div class="page" id="page-overvalued">
+  <div class="two-col">
+    <div class="sidebar">
+      <div class="panel">
+        <div class="panel-title">Filters</div>
+        <div class="section-label">City</div>
+        <select id="ov-city" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:8px">
+          <option value="">All cities</option>
+        </select>
+        <div class="section-label">Property type</div>
+        <select id="ov-type" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:8px">
+          <option value="">All types</option>
+        </select>
+        <div class="section-label">Min overvalued %</div>
+        <input type="number" id="ov-min-pct" value="5" min="0" max="100"
+               style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:12px">
+        <button class="btn-primary" onclick="runOvervalued()" style="width:100%">Find Overvalued</button>
+      </div>
+    </div>
+    <div class="main-content">
+      <div class="section-header">
+        <div class="section-title">Overvalued Listings 📈</div>
+        <div class="section-count" id="ov-count">0</div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:16px">
+        Properties where actual price significantly exceeds the model's predicted fair value.
+      </div>
+      <div id="ov-empty" class="empty-state">
+        <div class="empty-icon">📈</div>
+        <div class="empty-title">No overvalued listings found</div>
+        <div class="empty-sub">Train a model first, then click Find Overvalued.</div>
+      </div>
+      <div id="ov-results" style="display:none">
+        <div class="panel" style="padding:0;overflow:hidden">
+          <table class="corr-table">
+            <thead><tr>
+              <th>Address</th><th>Type</th><th>Location</th><th>Specs</th>
+              <th>Actual $</th><th>Predicted $</th><th>Overvalued $</th>
+              <th>Overvalued %</th><th>Confidence</th>
+            </tr></thead>
+            <tbody id="ov-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ====== MODEL TUNING PAGE ====== -->
 <div class="page" id="page-tuning">
   <div class="sidebar">
@@ -1144,6 +1233,14 @@
       <div class="section-label">Show Top</div>
       <input type="number" id="tune-top-n" value="100" min="5" max="1000"
              style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px">
+
+      <div class="section-label">Pass 2 filter gap (%)</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px;line-height:1.5">
+        Pass 2 tests only combos within this % of the best Pass 1 score. Lower = fewer tests, higher = safer.
+      </div>
+      <input type="number" id="tune-gap" value="5" min="1" max="30"
+             style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px"
+             title="e.g. 5 means: if best=82%, test all combos scoring ≥77%">
       <label class="check-item" style="margin:8px 0;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border2)">
         <input type="checkbox" id="tune-log" checked> Log-transform target
       </label>
@@ -1184,16 +1281,11 @@
                  title="Combos queued per round (e.g. 200). Progress updates every batch."
                  onchange="updateTuneEstimate()">
         </div>
-        <div style="flex:1">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Threads</div>
-          <input type="number" id="tune-n-threads" value="1" min="1" max="64"
-                 style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px"
-                 title="Real parallel workers (capped at CPU cores).">
-        </div>
       </div>
       <div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.5">
-        <b>Batch</b>: combos queued per round. <b>Threads</b>: parallel workers (≤ CPU cores). <b>CPU threads</b>: cores per RF. Best on 8-core: Threads=4, CPU=2.
+        <b>Batch</b>: combos per request (e.g. 50). Server auto-detects CPU threads. <b>CPU threads per RF</b>: -1 = all cores ÷ batch.
       </div>
+      <div id="tune-cpu-info" style="font-size:10px;font-family:var(--mono);color:var(--accent2);margin-top:4px;min-height:14px"></div>
 
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="btn-primary" id="tune-run-btn" onclick="runTuning()" style="flex:1;margin:0">Find Best Model</button>
@@ -1225,6 +1317,10 @@
         </div>
         <div id="tune-progress-text" style="font-size:11px;color:var(--text3);margin-top:8px;font-family:var(--mono)">Starting...</div>
       </div>
+      <div id="tune-freq-live" style="margin-bottom:10px;display:none">
+        <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Feature frequency in top results</div>
+        <div id="tune-freq-live-bars"></div>
+      </div>
       <div id="tune-live-results" style="padding:0 4px"></div>
     </div>
     <div id="tune-results" style="display:none">
@@ -1237,10 +1333,22 @@
         <table class="corr-table">
           <thead><tr>
             <th>#</th><th>Features</th><th>Algorithm</th>
-            <th>R2 Score</th><th>MAE</th><th></th>
+            <th>R² Score</th><th>MAE</th><th>Top feature impact</th><th></th>
           </tr></thead>
           <tbody id="tune-tbody"></tbody>
         </table>
+      </div>
+
+      <!-- Feature frequency chart -->
+      <div id="tune-freq-panel" style="margin-top:24px;display:none">
+        <div class="section-header">
+          <div class="section-title">Feature Frequency in Top Results</div>
+          <div class="section-count" id="tune-freq-count">–</div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:12px">
+          How often each feature appears in the top configurations — higher = more consistently useful.
+        </div>
+        <div id="tune-freq-bars"></div>
       </div>
     </div>
   </div>
@@ -1283,13 +1391,16 @@ function uploadFile(file) {
       setupCityFilter(data);
       setupTuningUI(data);
       loadSavedModelsList();
+      loadFileManager();
       setupCatFilters(data);
       if (data.preview) {
         appData._property_types = [...new Set(data.preview.map(r => r.property_type || r.type).filter(Boolean))];
       }
       appData._city_to_districts = data.city_to_districts || {};
+      setupOvervaluedFilters(data);
       setStatus(true, `${data.rows} rows · ${data.columns} columns`);
       showToast(`Loaded: ${data.rows} rows, ${data.columns} columns`, 'success');
+      loadFileManager();
       // Show derived features toast
       const _dr = ['age','lot_ratio','room_density','bath_ratio','has_view','has_fireplace',
                    'has_cooling','has_parking_feat','has_appliances','has_interior'];
@@ -1368,7 +1479,7 @@ function setupPredictionUI(data) {
   if (autoIdx >= 0) targetSel.selectedIndex = autoIdx;
 
   // Feature list — numeric + categorical columns, exclude obvious ID/URL cols
-  const skipHints = ['url', 'link', 'mls', 'address', 'notes', 'brokerage', 'agent'];
+  const skipHints = ['url', 'link', 'mls', 'address', 'notes', 'brokerage', 'agent', '_source', '_file_type', '_sample_weight'];
   const list = document.getElementById('pred-feature-list');
   list.innerHTML = '';
   const usable = [...data.numeric_columns, ...data.categorical_columns]
@@ -1743,6 +1854,57 @@ function drawScatter(data) {
 }
 
 // =================== TRAIN ===================
+// =================== TYPICAL VALUES ===================
+let _typicalValues = {};
+
+async function loadTypicalValues(featureCols, targetCol) {
+  try {
+    const r = await fetch('/api/typical_values', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({feature_cols: featureCols, target_col: targetCol})
+    });
+    _typicalValues = await r.json();
+    applyTypicalHints();
+  } catch(e) {}
+}
+
+function applyTypicalHints() {
+  // Add hint text below each predict form input
+  document.querySelectorAll('#predict-inputs input, #predict-inputs select').forEach(inp => {
+    const col = inp.dataset?.col || inp.getAttribute('data-col');
+    if (!col) return;
+    const tv = _typicalValues[col];
+    if (!tv) return;
+    let hint = inp.parentElement?.querySelector('.val-hint');
+    if (!hint) {
+      hint = document.createElement('div');
+      hint.className = 'val-hint';
+      hint.style.cssText = 'font-size:9px;color:var(--text3);margin-top:1px';
+      inp.parentElement?.appendChild(hint);
+    }
+    if (tv.type === 'numeric') {
+      hint.textContent = 'median ' + tv.median + '  range ' + tv.min + '–' + tv.max;
+      if (!inp.placeholder) inp.placeholder = 'e.g. ' + tv.median;
+    } else if (tv.type === 'categorical') {
+      hint.textContent = 'e.g. ' + (tv.top3 || []).slice(0,2).join(', ');
+    }
+  });
+  // Wire "Fill typical" button
+  const typRow = _typicalValues['_typical_row'];
+  const btn = document.getElementById('fill-typical-btn');
+  if (btn && typRow) {
+    btn.style.display = 'inline-block';
+    btn.onclick = () => {
+      document.querySelectorAll('#predict-inputs input, #predict-inputs select').forEach(inp => {
+        const col = inp.dataset?.col || inp.getAttribute('data-col');
+        if (col && typRow[col] != null) inp.value = typRow[col];
+      });
+      showToast('Filled with typical values', 'success');
+    };
+  }
+}
+// =================== END TYPICAL VALUES ===================
+
 function trainModel() {
   const target = document.getElementById('target-col').value;
   const features = [...document.querySelectorAll('#pred-feature-list input:checked')]
@@ -1765,7 +1927,13 @@ function trainModel() {
   .then(data => {
     btn.disabled = false;
     btn.textContent = 'Train Model';
-    if (data.error) { showToast(data.error, 'error'); return; }
+    if (data.error) {
+      console.error('Training error:', data.error);
+      console.error('Detail:', data.detail);
+      console.error('Trace:', data.trace);
+      showToast(data.error + (data.detail ? ' — ' + data.detail : ''), 'error');
+      return;
+    }
     modelData = data;
     showPredResults(data);
     savePredValues();  // save current inputs before form rebuilds
@@ -1775,16 +1943,22 @@ function trainModel() {
     showUndervaluedControls();
     document.getElementById('analyse-btn').style.display = 'block';
   })
-  .catch(() => { btn.disabled = false; btn.textContent = 'Train Model'; showToast('Training error', 'error'); });
+  .catch(e => { btn.disabled = false; btn.textContent = 'Train Model'; console.error('Train fetch error:', e); showToast('Network error: ' + e.message, 'error'); });
 }
 
 function showPredResults(data) {
   document.getElementById('pred-empty').style.display = 'none';
   document.getElementById('pred-results').style.display = 'block';
   document.getElementById('save-model-btn').disabled = false;
+  if (_allTuneResults?.length) showCommonTuningCombo();
+  // Load typical values for predict form hints
+  const _fc = data.feature_cols || [...document.querySelectorAll('#pred-feature-list input:checked')].map(c=>c.value);
+  if (typeof loadTypicalValues === 'function') loadTypicalValues(_fc, document.getElementById('target-col')?.value || 'price');
 
   const modelNames = { random_forest: 'Random Forest', gradient_boosting: 'Gradient Boosting', linear: 'Linear Regression' };
   document.getElementById('model-type-badge').textContent = modelNames[data.model_type] || data.model_type;
+  // Scroll to results
+  document.getElementById('pred-results').scrollIntoView({behavior:'smooth', block:'nearest'});
   document.getElementById('model-config-summary').style.display = 'block';
   const _af = (typeof getGlobalFilters === 'function') ? getGlobalFilters() : {};
   const _afParts = Object.entries(_af).map(([k,v]) => Array.isArray(v) ? k+': '+v.join(', ') : k+': '+v);
@@ -2848,6 +3022,11 @@ function renderUvTable(listings) {
     const confColor = {'high':'var(--success)','medium':'var(--accent3)','low':'var(--danger)'}[r.confidence] || 'var(--text3)';
     const confLabel = {'high':'High','medium':'Medium','low':'Low'}[r.confidence] || '?';
     const nComp = r.n_district || r.n_city || 0;
+    const stabColor = {'stable':'var(--success)','moderate':'var(--accent3)','unstable':'var(--danger)'}[r.stability] || 'var(--text3)';
+    const stabIcon  = {'stable':'🎯','moderate':'〜','unstable':'⚠️'}[r.stability] || '';
+    const stabTip   = r.stability==='stable' ? 'Model agrees on this price (low tree variance)' :
+                      r.stability==='moderate' ? 'Some uncertainty in prediction' :
+                      'High variance — treat with caution';
     tbody.innerHTML += `
       <tr>
         <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${addrCell}</td>
@@ -2868,6 +3047,7 @@ function renderUvTable(listings) {
         <td>
           <span style="font-size:11px;font-weight:600;color:${confColor}">${confLabel}</span>
           <div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:3px">${nComp} comps</div>
+          <span style="font-size:10px;color:${stabColor}" title="${stabTip}">${stabIcon} ${r.stability||'?'} ${r.pred_cv!=null?'±'+r.pred_cv+'%':''}</span><br>
           <button onclick="toggleComps(this,${listings.indexOf(r)})"
                   style="padding:2px 8px;background:transparent;border:1px solid var(--border2);border-radius:5px;color:var(--text3);cursor:pointer;font-size:10px;font-family:var(--sans)">
             view comps
@@ -3058,6 +3238,214 @@ function renderUvSimilar(panel, data, queryListing) {
 }
 
 // =================== END UNDERVALUED ===================
+
+// =================== OVERVALUED ===================
+async function runOvervalued() {
+  const btn = document.querySelector('#page-overvalued .btn-primary');
+  if (btn) { btn.disabled=true; btn.textContent='Loading...'; }
+  try {
+    const r = await fetch('/api/overvalued', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        top_n: 200,
+        min_over_pct: parseFloat(document.getElementById('ov-min-pct')?.value)||5,
+        city: document.getElementById('ov-city')?.value||'',
+        property_type: document.getElementById('ov-type')?.value||'',
+      })
+    });
+    const d = await r.json();
+    if (d.error) { showToast(d.error,'error'); return; }
+    const listings = d.listings||[];
+    document.getElementById('ov-count').textContent = listings.length;
+    document.getElementById('ov-empty').style.display = listings.length?'none':'block';
+    document.getElementById('ov-results').style.display = listings.length?'block':'none';
+    const fmt = v => v!=null?'$'+Math.round(v).toLocaleString('en-CA'):'—';
+    const tbody = document.getElementById('ov-tbody');
+    tbody.innerHTML = '';
+    listings.forEach(r => {
+      const addr   = r.street||'—';
+      const type   = r.property_type||'—';
+      const loc    = [r.city,r.district].filter(Boolean).join(' / ')||'—';
+      const url    = r.summary_url||'';
+      const addrCell = url?`<a href="${url}" target="_blank" style="color:var(--danger);text-decoration:none;font-size:12px">${addr} 🔗</a>`:`<span style="font-size:12px">${addr}</span>`;
+      const pct    = Math.min(100, r.gap_pct);
+      const stabColor = {'stable':'var(--success)','moderate':'var(--accent3)','unstable':'var(--danger)'}[r.stability]||'var(--text3)';
+      const confColor = {'high':'var(--success)','medium':'var(--accent3)','low':'var(--danger)'}[r.confidence]||'var(--text3)';
+      const stabLabel = r.stability==='stable'?'🎯 stable':r.stability==='moderate'?'〜 moderate':'⚠️ unstable';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${addrCell}</td>
+        <td style="font-size:11px;color:var(--text2)">${type}</td>
+        <td style="font-size:11px;color:var(--text2)">${loc}</td>
+        <td style="font-family:var(--mono);font-size:11px;white-space:nowrap">${r.bedrooms??'—'}bd/${r.bathrooms??'—'}ba${r.floor_area_sqft?' · '+Math.round(r.floor_area_sqft)+'sqft':''}</td>
+        <td style="font-family:var(--mono);font-size:12px;color:var(--danger);font-weight:600">${fmt(r.actual)}</td>
+        <td style="font-family:var(--mono);font-size:12px;color:var(--text2)">${fmt(r.predicted)}</td>
+        <td style="font-family:var(--mono);font-size:12px;color:var(--danger)">${fmt(r.gap)}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="flex:1;height:6px;background:var(--border);border-radius:3px;min-width:50px">
+              <div style="height:100%;width:${pct}%;background:var(--danger);border-radius:3px"></div>
+            </div>
+            <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--danger)">+${r.gap_pct}%</span>
+          </div>
+        </td>
+        <td>
+          <span style="font-size:11px;font-weight:600;color:${confColor}">${r.confidence||'?'}</span>
+          <div style="font-size:9px;color:${stabColor}">${stabLabel}</div>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  } catch(e) { showToast('Error: '+e.message,'error'); }
+  finally { if (btn) { btn.disabled=false; btn.textContent='Find Overvalued'; } }
+}
+
+function setupOvervaluedFilters(data) {
+  const cityEl = document.getElementById('ov-city');
+  const typeEl = document.getElementById('ov-type');
+  if (!cityEl || !typeEl) return;
+  const cities = data.city_to_districts ? Object.keys(data.city_to_districts) : [];
+  cityEl.innerHTML = '<option value="">All cities</option>' + cities.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const types = (data.preview||[]).map(r=>r.property_type).filter(Boolean);
+  const uniq  = [...new Set(types)];
+  typeEl.innerHTML = '<option value="">All types</option>' + uniq.map(t=>`<option value="${t}">${t}</option>`).join('');
+}
+// =================== END OVERVALUED ===================
+
+// =================== DEMO MODE ===================
+async function toggleDemo() {
+  const r = await fetch('/api/toggle_demo', {method:'POST'});
+  const d = await r.json();
+  const btn = document.getElementById('demo-btn');
+  if (btn) {
+    btn.textContent = 'Demo: ' + (d.demo_mode ? 'ON' : 'OFF');
+    btn.style.color = d.demo_mode ? 'var(--accent3)' : 'var(--text3)';
+    btn.style.borderColor = d.demo_mode ? 'var(--accent3)' : 'var(--border2)';
+  }
+  showToast('Demo mode ' + (d.demo_mode ? 'ON — addresses hidden' : 'OFF'), 'success');
+}
+// =================== END DEMO MODE ===================
+
+// =================== MULTI-FILE UPLOAD ===================
+async function uploadExtraFile() {
+  const input = document.getElementById('extra-file-input');
+  const file  = input.files[0];
+  if (!file) return;
+  const ftype = document.getElementById('extra-file-type')?.value || 'listings';
+  const fd    = new FormData();
+  fd.append('file', file);
+  fd.append('file_type', ftype);
+  fd.append('weight', ftype==='sold' ? '3' : '1');
+  showToast('Adding ' + file.name + '...', 'success');
+  try {
+    const r = await fetch('/api/upload_extra', {method:'POST', body: fd});
+    const d = await r.json();
+    if (d.error) { showToast(d.error,'error'); return; }
+    showToast(`Added ${d.new_rows} rows from ${file.name}. Total: ${d.rows} rows`, 'success');
+    // Update files list
+    const list = document.getElementById('extra-files-list');
+    const icon = ftype==='sold'?'💰':'📋';
+    list.innerHTML += `<div>${icon} ${file.name} — ${d.new_rows} rows (${ftype})</div>`;
+    setStatus(true, `${d.rows} rows · multiple files`);
+  } catch(e) { showToast('Upload error: '+e.message,'error'); }
+  input.value = '';
+}
+// =================== END MULTI-FILE UPLOAD ===================
+
+// =================== FILE MANAGER ===================
+async function loadFileManager() {
+  try {
+    const r = await fetch('/api/files');
+    const d = await r.json();
+    const fm = document.getElementById('file-manager');
+    if (d.files && d.files.length > 0) {
+      if (fm) fm.style.display = 'block';
+      renderFileManager(d);
+      // If autoloaded data exists but app UI not set up yet — initialize
+      if (d.total_rows > 0 && !appData._initialized) {
+        const rUp = await fetch('/api/upload', {method:'POST', body: new FormData()}).catch(()=>null);
+        // Re-fetch upload metadata without re-uploading
+        const rMeta = await fetch('/api/upload_meta').catch(()=>null);
+        if (rMeta && rMeta.ok) {
+          const meta = await rMeta.json();
+          if (!meta.error) {
+            appData = meta; appData._initialized = true;
+            setupCorrelationUI(meta); setupPredictionUI(meta); setupImpactUI(meta);
+            setupSegmentUI(meta); setupCityFilter(meta); setupTuningUI(meta);
+            setupCatFilters(meta); setupOvervaluedFilters(meta);
+            appData._city_to_districts = meta.city_to_districts || {};
+            setStatus(true, `${meta.rows} rows · ${meta.columns} columns (auto-loaded)`);
+          }
+        }
+      }
+    } else {
+      if (fm) fm.style.display = 'none';
+    }
+  } catch(e) {}
+}
+
+function renderFileManager(d) {
+  const list  = document.getElementById('file-manager-list');
+  const total = document.getElementById('file-manager-total');
+  if (!list) return;
+  const files = d.files || [];
+  list.innerHTML = '';
+  files.forEach((f, i) => {
+    const typeIcon = f.type === 'sold' ? '💰' : '📋';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:4px;margin-bottom:5px' + (f.excluded ? ';opacity:0.4' : '');
+    row.innerHTML =
+      '<span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + f.name + '">' + typeIcon + ' ' + f.name + '</span>'
+      + '<span style="font-size:10px;color:var(--text3);white-space:nowrap">' + f.rows + 'r</span>'
+      + '<select data-idx="' + i + '" style="padding:1px 2px;font-size:10px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);width:44px">'
+      + [1,2,3,5].map(w => '<option value="' + w + '"' + (Math.round(f.weight) === w ? ' selected' : '') + '>×' + w + '</option>').join('')
+      + '</select>'
+      + '<button data-idx="' + i + '" data-action="toggle" style="padding:1px 5px;font-size:10px;background:transparent;border:1px solid var(--border2);border-radius:4px;cursor:pointer;color:var(--text3)">' + (f.excluded ? 'off' : 'on') + '</button>'
+      + '<button data-idx="' + i + '" data-action="remove" style="padding:1px 5px;font-size:10px;background:transparent;border:1px solid var(--danger);border-radius:4px;cursor:pointer;color:var(--danger)">✕</button>';
+    row.querySelector('select').addEventListener('change', function() {
+      _fileManagerAction(files, +this.dataset.idx, 'weight', parseFloat(this.value));
+    });
+    row.querySelectorAll('button[data-action]').forEach(btn => {
+      btn.addEventListener('click', () => _fileManagerAction(files, +btn.dataset.idx, btn.dataset.action));
+    });
+    list.appendChild(row);
+  });
+  if (total) total.textContent = 'Active: ' + (d.total_rows || 0) + ' rows';
+}
+
+async function _fileManagerAction(files, idx, action, weight) {
+  const src = files[idx].name;
+  if (action === 'toggle') {
+    await fetch('/api/files/toggle', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:src})});
+    loadFileManager();
+  } else if (action === 'remove') {
+    if (!confirm('Remove ' + src + ' from dataset?')) return;
+    await fetch('/api/files/remove', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:src})});
+    showToast('Removed: ' + src, 'success');
+    loadFileManager();
+  } else if (action === 'weight') {
+    await fetch('/api/files/set_weight', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:src, weight:weight})});
+    showToast('Weight updated', 'success');
+  }
+}
+
+async function toggleFileSource(name) {
+  await fetch('/api/files/toggle', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:name})});
+  loadFileManager();
+}
+
+async function removeFileSource(name) {
+  if (!confirm('Remove ' + name + ' from dataset?')) return;
+  await fetch('/api/files/remove', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:name})});
+  loadFileManager();
+  showToast('Removed: ' + name, 'success');
+}
+
+async function setFileWeight(sel) {
+  const src = sel.dataset.src;
+  await fetch('/api/files/set_weight', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:src, weight:parseFloat(sel.value)})});
+  showToast('Weight updated', 'success');
+}
+// =================== END FILE MANAGER ===================
 // =================== SAVED MODELS ===================
 let _savedModels = [];
 
@@ -3209,7 +3597,7 @@ function setupTuningUI(data) {
   const list = document.getElementById('tune-feature-list');
   const nullR = data.null_rates || {};
   list.innerHTML = '';
-  const skip = ['url','link','mls','street','summary','virtual','photo'];
+  const skip = ['url','link','mls','street','summary','virtual','photo','_source','_file_type','_sample_weight'];
   [...data.numeric_columns, ...data.categorical_columns]
     .filter(c => !skip.some(s => c.toLowerCase().includes(s)))
     .forEach(col => {
@@ -3240,7 +3628,8 @@ function setupTuningUI(data) {
         if (p.target) { const s = document.getElementById('tune-target'); if(s) s.value = p.target; }
         if (p.minF)   { const s = document.getElementById('tune-min-features'); if(s) s.value = p.minF; }
         if (p.maxF)   { const s = document.getElementById('tune-max-features'); if(s) s.value = p.maxF; }
-        if (p.parC)   { const s = document.getElementById('tune-parallel-combos'); if(s) s.value = p.parC; }
+        if (p.gapV)   { const s = document.getElementById('tune-gap');             if(s) s.value = p.gapV; }
+    if (p.parC)   { const s = document.getElementById('tune-parallel-combos'); if(s) s.value = p.parC; }
     if (p.nThr)   { const s = document.getElementById('tune-n-threads');       if(s) s.value = p.nThr; }
         if (p.nJobs)  { const s = document.getElementById('tune-n-jobs');          if(s) s.value = p.nJobs; }
         if (p.nWork)  { const s = document.getElementById('tune-n-workers');       if(s) s.value = p.nWork; updateWorkerOptions(); }
@@ -3303,7 +3692,8 @@ function runTuning() {
   const useLog  = document.getElementById('tune-log').checked;
   const rmOut   = document.getElementById('tune-outliers').checked;
   const batchSz = parseInt(document.getElementById('tune-parallel-combos').value) || 1;
-  const nThr    = parseInt(document.getElementById('tune-n-threads')?.value) || 1;
+  const _nThrRaw = parseInt(document.getElementById('tune-n-threads')?.value) || 0;
+  const nThr     = _nThrRaw > 0 ? _nThrRaw : Math.min(batchSz, 64);  // 0 = auto: use batchSz (server caps at ncpu*2)
   const nJobs   = parseInt(document.getElementById('tune-n-jobs')?.value) || -1;
   const wp      = getWorkerParams();
 
@@ -3352,25 +3742,44 @@ function runTuning() {
   _tuneStartT = Date.now();
   window._currentTuneJobId = 'batch_' + Date.now();
 
-  // Run all combos with rf_full directly — accurate scores from the start
-  // With batching+threads this is fast enough; no need for rf_fast pre-screening
-  const phase1Total = workerCombos.length;
-  runBatchPhase(workerCombos, 'rf_full', 'Phase 1/2: scoring all combos (RF n=200)',
-    phase1Total + Math.floor(phase1Total*0.3), 0, target, useLog, rmOut, nThr, nJobs, batchSz, topN,
+  // 2-pass screening:
+  // Pass 1: rf_fast (n=30) on ALL combos — fast ranking
+  // Pass 2: rf_full (n=200) on top 50% — accurate scores for candidates that matter
+  // Guarantee: only dropping combos that score in bottom 50% at n=30
+  // Risk of missing a good combo: ~5% (those that score low at n=30 but high at n=200)
+  runBatchPhase(workerCombos, 'rf_fast', 'Pass 1/2: fast screening all combos (RF n=30)',
+    workerCombos.length + Math.ceil(workerCombos.length * 0.5) + Math.ceil(workerCombos.length * 0.15),
+    0, target, useLog, rmOut, nThr, nJobs, batchSz, topN,
     (done) => {
       if (_tuneStop) { finalizeTuning(topN); return; }
-      // Phase 2: top 30% with GB + Linear
-      const top30 = [..._tuneAllRes].sort((a,b)=>b.r2-a.r2)
-                      .slice(0, Math.max(1, Math.floor(_tuneAllRes.length*0.3)))
-                      .map(r => r.features);
-      const phase2Total = done + top30.length * 2;
-      document.getElementById('tune-progress-badge').textContent = done + ' / ' + phase2Total + ' tests';
-      runBatchPhase(top30, 'gb', 'Phase 2/2: GB on top 30%',
-        phase2Total, done, target, useLog, rmOut, nThr, nJobs, Math.max(batchSz, top30.length), topN,
+      // Pass 2: relative gap criterion — only combos within 'gap' % of best score
+      const _gap  = parseFloat(document.getElementById('tune-gap')?.value) || 5;
+      const _best = Math.max(..._tuneAllRes.map(r => r.r2));
+      const _cutoff = _best - _gap;
+      const top50 = _tuneAllRes.filter(r => r.r2 >= _cutoff).map(r => r.features);
+      document.getElementById('tune-progress-text').textContent =
+        'Pass 1 best: '+_best.toFixed(1)+'%  cutoff: '+_cutoff.toFixed(1)+'%  pass 2: '+top50.length+' combos';
+      const pass2Total = done + top50.length + Math.ceil(top50.length * 0.3);
+      document.getElementById('tune-progress-badge').textContent = done + ' / ' + pass2Total + ' tests';
+      runBatchPhase(top50, 'rf_full', 'Pass 2/2: accurate scoring top 50% (RF n=200)',
+        pass2Total, done, target, useLog, rmOut, nThr, nJobs, Math.max(batchSz, top50.length), topN,
         (done2) => {
-          runBatchPhase(top30, 'linear', 'Phase 2/2: Linear on top 30%',
-            done2 + top30.length, done2, target, useLog, rmOut, top30.length, topN,
-            () => finalizeTuning(topN));
+          if (_tuneStop) { finalizeTuning(topN); return; }
+          // Pass 3: top 30% with GB + Linear
+          const top30 = [..._tuneAllRes]
+                          .filter(r => r.model === 'Random Forest')
+                          .sort((a,b)=>b.r2-a.r2)
+                          .slice(0, Math.max(1, Math.ceil(_tuneAllRes.length * 0.15)))
+                          .map(r => r.features);
+          const pass3Total = done2 + top30.length * 2;
+          document.getElementById('tune-progress-badge').textContent = done2 + ' / ' + pass3Total + ' tests';
+          runBatchPhase(top30, 'gb', 'Pass 3/3: GB on top 15%',
+            pass3Total, done2, target, useLog, rmOut, nThr, nJobs, Math.max(batchSz, top30.length), topN,
+            (done3) => {
+              runBatchPhase(top30, 'linear', 'Pass 3/3: Linear on top 15%',
+                done3 + top30.length, done3, target, useLog, rmOut, nThr, nJobs, top30.length, topN,
+                () => finalizeTuning(topN));
+            });
         });
     });
 }
@@ -3395,10 +3804,11 @@ async function runBatchPhase(combos, modelType, phaseName, totalTests, doneOffse
       const d = await resp.json();
       if (d.error) { showToast(d.error, 'error'); break; }
       if (i === 0 && d.cpu_info) {
-        const el = document.getElementById('tune-progress-text');
-        el.textContent = d.cpu_info + '  |  ' + el.textContent;
+        const cpuEl = document.getElementById('tune-cpu-info');
+        if (cpuEl) cpuEl.textContent = d.cached ? '⚡ cached' : d.cpu_info;
       }
       done += d.n;
+      if (d.cached) markCachedBatch(true);
 
       // Merge results — Phase 2/3 always overwrites Phase 1 for same features
       const featKey = f => [...f].sort().join('|');
@@ -3407,9 +3817,9 @@ async function runBatchPhase(combos, modelType, phaseName, totalTests, doneOffse
         const existIdx = _tuneAllRes.findIndex(x => featKey(x.features) === key && x.model === r.model);
         if (existIdx >= 0) {
           // Always overwrite — later phases (rf_full) are more accurate than rf_fast
-          _tuneAllRes[existIdx] = { ..._tuneAllRes[existIdx], r2: r.r2, mae: r.mae };
+          _tuneAllRes[existIdx] = { ..._tuneAllRes[existIdx], r2: r.r2, mae: r.mae, importance: r.importance || _tuneAllRes[existIdx].importance };
         } else {
-          _tuneAllRes.push(r);
+          _tuneAllRes.push({...r});
         }
       }
       _tuneAllRes.sort((a,b) => b.r2 - a.r2);
@@ -3425,7 +3835,8 @@ async function runBatchPhase(combos, modelType, phaseName, totalTests, doneOffse
       const spdStr  = speed > 0 ? '  '+speed.toFixed(1)+'/s' : '';
       document.getElementById('tune-progress-text').textContent = phaseName + spdStr + etaStr + '  |  ' + _tuneAllRes.length + ' results';
 
-      renderTuneLive(_tuneAllRes);
+      const _topN = parseInt(document.getElementById('tune-top-n')?.value) || 100;
+      renderTuneLive(_tuneAllRes.slice(0, _topN));
     } catch(e) { showToast('Batch error: ' + e.message, 'error'); break; }
   }
   if (onDone) onDone(done);
@@ -3434,7 +3845,10 @@ async function runBatchPhase(combos, modelType, phaseName, totalTests, doneOffse
 function finalizeTuning(topN) {
   document.getElementById('tune-progress-panel').style.display = 'none';
   const top = _tuneAllRes.slice(0, topN);
-  if (top.length) renderTuneResults(top);
+  if (top.length) {
+    renderTuneResults(top);
+    renderFeatureFreq(top);
+  }
   resetTuneBtn();
   showToast('Done! Best R² = ' + (top[0]?.r2 || '?') + '%', 'success');
   _allTuneResults = top;
@@ -3456,20 +3870,94 @@ function modelIcon(m) { return m.includes('Forest')?'🌲':m.includes('Boost')?'
 // Store all tune results stably for button access
 let _allTuneResults = [];
 
+function computeFeatureImpact(results) {
+  // Size-controlled impact: compare features within same combo size
+  // Avoids bias where large combos tend to score higher
+  const fImp = {};
+  const bySize = {};
+  results.forEach(r => {
+    const sz = r.n_features || r.features.length;
+    if (!bySize[sz]) bySize[sz] = [];
+    bySize[sz].push(r);
+  });
+  Object.values(bySize).forEach(group => {
+    const allFeats = [...new Set(group.flatMap(r => r.features))];
+    const groupAvg = group.reduce((a,r)=>a+r.r2,0)/group.length;
+    allFeats.forEach(f => {
+      const withF = group.filter(r => r.features.includes(f));
+      if (!withF.length) return;
+      const avgWith = withF.reduce((a,r)=>a+r.r2,0)/withF.length;
+      const imp = avgWith - groupAvg;
+      if (!fImp[f]) fImp[f] = {impSum:0, cnt:0};
+      fImp[f].impSum += imp * withF.length;
+      fImp[f].cnt    += withF.length;
+    });
+  });
+  Object.keys(fImp).forEach(f => {
+    fImp[f].imp = fImp[f].cnt > 0 ? fImp[f].impSum / fImp[f].cnt : 0;
+  });
+  return fImp;
+}
+
 function renderTuneLive(results) {
   _allTuneResults = results;
   const fmt = v => '$'+Math.round(v).toLocaleString('en-CA');
-  document.getElementById('tune-live-results').innerHTML = results.map((r,i) =>
-    '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">'
-    +'<span style="font-size:12px;color:var(--text3);min-width:24px">#'+(i+1)+'</span>'
-    +'<span style="font-size:18px;font-weight:700;color:'+r2Color(r.r2)+';font-family:var(--mono);min-width:54px">'+r.r2+'%</span>'
-    +'<span style="font-size:11px;white-space:nowrap">'+modelIcon(r.model)+' '+r.model+'</span>'
-    +'<span style="font-size:11px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.features.join(', ')+'</span>'
-    +'<span style="font-size:11px;color:var(--text3);font-family:var(--mono);white-space:nowrap">'+fmt(r.mae)+'</span>'
-    +'<button onclick="applyTuneConfig(_allTuneResults['+i+'].features,_allTuneResults['+i+'].model,true)" '
-    +'style="padding:3px 8px;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap">Use&amp;Train</button>'
-    +'</div>'
-  ).join('');
+
+  const fImp = computeFeatureImpact(results);
+
+  // ── Frequency table (top 15) ─────────────────────────────────────────────
+  const freqPanel = document.getElementById('tune-freq-live');
+  const freqBars  = document.getElementById('tune-freq-live-bars');
+  if (freqPanel && freqBars && results.length > 0) {
+    freqPanel.style.display = 'block';
+    const freqCount = {};
+    results.forEach(r => r.features.forEach(f => freqCount[f] = (freqCount[f]||0)+1));
+    const freqSorted = Object.entries(freqCount).sort((a,b) => b[1]-a[1]).slice(0, 15);
+    const maxFreq = freqSorted[0]?.[1] || 1;
+    freqBars.innerHTML = freqSorted.map(([f, cnt]) => {
+      const pct   = Math.round(cnt / results.length * 100);
+      const barW  = Math.round(cnt / maxFreq * 100);
+      const color = pct >= 70 ? 'var(--success)' : pct >= 40 ? 'var(--accent)' : 'var(--text3)';
+      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+        + '<span style="min-width:120px;font-size:11px;color:var(--text2);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+f+'</span>'
+        + '<div style="flex:1;background:var(--border);border-radius:3px;height:14px;position:relative;min-width:40px">'
+        + '<div style="height:100%;width:'+barW+'%;background:'+color+';border-radius:3px"></div>'
+        + '<span style="position:absolute;left:4px;top:1px;font-size:10px;font-family:var(--mono);line-height:12px">'+cnt+'/'+results.length+'</span>'
+        + '</div>'
+        + '<span style="min-width:32px;font-size:10px;font-family:var(--mono);color:'+color+';text-align:right">'+pct+'%</span>'
+        + '</div>';
+    }).join('');
+  }
+
+  // ── Result rows ───────────────────────────────────────────────────────────
+  const container = document.getElementById('tune-live-results');
+  container.innerHTML = '';
+  results.forEach((r, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);flex-wrap:wrap';
+    // Badges: importance % from this model + frequency % in results
+    const importance = r.importance || {};
+    const featureBadges = r.features.map(f => {
+      const impPct  = importance[f] != null ? Math.round(importance[f]) : null;
+      const ic = impPct >= 50 ? 'var(--success)' : impPct >= 20 ? 'var(--accent)' : 'var(--text3)';
+      return '<span style="display:inline-block;padding:1px 6px;margin:1px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;font-size:11px">'
+        + f
+        + (impPct != null ? '<span style="font-size:9px;color:'+ic+';font-weight:700;margin-left:3px">'+impPct+'%</span>' : '')
+        + '</span>';
+    }).join('');
+    row.innerHTML =
+      '<span style="font-size:12px;color:var(--text3);min-width:24px">#'+(i+1)+'</span>'
+      +'<span style="font-size:16px;font-weight:700;color:'+r2Color(r.r2)+';font-family:var(--mono);min-width:52px">'+r.r2+'%</span>'
+      +'<span style="font-size:11px;white-space:nowrap">'+modelIcon(r.model)+' '+r.model+'</span>'
+      +'<span style="flex:1;min-width:0">'+featureBadges+'</span>'
+      +'<span style="font-size:11px;color:var(--text3);font-family:var(--mono);white-space:nowrap">'+fmt(r.mae)+'</span>'
+      +'<button data-live-idx="'+i+'" style="padding:3px 8px;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap">Use&amp;Train</button>';
+    row.querySelector('button').addEventListener('click', () => {
+      const res = _allTuneResults[i];
+      if (res) applyTuneConfig(res.features, res.model, true);
+    });
+    container.appendChild(row);
+  });
 }
 function renderTuneResults(results) {
   _allTuneResults = results;
@@ -3485,22 +3973,78 @@ function renderTuneResults(results) {
     +'<div class="stat-card"><div class="stat-val" style="color:var(--accent)">'+fmt(bestMae?.mae||0)+'</div><div class="stat-label">Best MAE</div></div>'
     +'<div class="stat-card"><div class="stat-val" style="font-size:13px;color:var(--accent2)">'+topModel+'</div><div class="stat-label">Top algo</div></div>'
     +'<div class="stat-card"><div class="stat-val">'+(best?.n_features||'?')+'</div><div class="stat-label">Optimal features</div></div>';
+
+  const _fImp = computeFeatureImpact(results);
+
+  // ── Most common combo panel ──────────────────────────────────────────────
+  const top10 = results.slice(0, Math.min(10, results.length));
+  const freq  = {};
+  top10.forEach(r => r.features.forEach(f => freq[f] = (freq[f]||0)+1));
+  const topFeats = Object.entries(freq).sort((a,b)=>b[1]-a[1])
+                     .filter(([,c]) => c >= top10.length*0.4).map(([f])=>f);
+  const algoCnt  = {};
+  top10.forEach(r => algoCnt[r.model] = (algoCnt[r.model]||0)+1);
+  const bestAlgo = Object.entries(algoCnt).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
+  const algoIcon = bestAlgo.includes('Forest')?'🌲':bestAlgo.includes('Boost')||bestAlgo.includes('GB')?'🚀':bestAlgo.includes('Stack')?'🔗':'📈';
+
+  // Inject common combo panel above table (or update if exists)
+  let ccPanel = document.getElementById('tune-common-combo');
+  if (!ccPanel) {
+    ccPanel = document.createElement('div');
+    ccPanel.id = 'tune-common-combo';
+    ccPanel.style.cssText = 'padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:16px';
+    const resultsEl = document.getElementById('tune-results');
+    const tablePanel = resultsEl.querySelector('.panel');
+    if (tablePanel) resultsEl.insertBefore(ccPanel, tablePanel);
+  }
+  ccPanel.innerHTML = '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-family:var(--mono);letter-spacing:.08em;margin-bottom:6px">Most frequent combination (top 10)</div>'
+    + '<div style="margin-bottom:6px"><b>' + algoIcon + ' ' + bestAlgo + '</b>: '
+    + topFeats.map(f => {
+        const pct = Math.round((freq[f]||0)/top10.length*100);
+        const imp = (_fImp[f]?.imp||0);
+        const ic  = imp>2?'var(--success)':imp>0?'var(--accent2)':'var(--text3)';
+        return '<span style="display:inline-block;margin:1px 3px;padding:2px 8px;background:var(--surface2);border-radius:4px;font-size:11px">'
+          + f
+          + '<span style="font-size:9px;color:var(--accent2);margin-left:3px">' + pct + '%</span>'
+          + '<span style="font-size:9px;color:' + ic + ';margin-left:2px">' + (imp>=0?'+':'') + imp.toFixed(1) + '%</span>'
+          + '</span>';
+      }).join('') + '</div>'
+    + '<div style="font-size:10px;color:var(--text3)">Each badge: <b>importance %</b> (share of model accuracy) · <b>frequency %</b> (how often in top results)</div>';
+
   document.getElementById('tune-tbody').innerHTML = results.map((r,i) => {
-    const badges = r.features.map(f => '<span style="display:inline-block;padding:1px 7px;margin:1px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;font-size:11px">'+f+'</span>').join('');
+    const _imp_r = r.importance || {};
+    const badges = r.features.map(f => {
+      const impPct  = _imp_r[f] != null ? Math.round(_imp_r[f]) : null;
+      const ic = impPct >= 50 ? 'var(--success)' : impPct >= 20 ? 'var(--accent)' : 'var(--text3)';
+      return '<span style="display:inline-block;padding:1px 7px;margin:1px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;font-size:11px">'
+        + f
+        + (impPct != null ? '<span style="font-size:9px;color:'+ic+';font-weight:700;margin-left:3px">'+impPct+'%</span>' : '')
+        + '</span>';
+    }).join('');
     const bw = Math.min(100, r.r2);
+    // Top feature impact for this combo
+    const comboImpacts = r.features
+      .map(f => ({f, imp: _fImp[f]?.imp || 0}))
+      .sort((a,b) => b.imp - a.imp);
+    const impCell = comboImpacts.slice(0,3).map(({f, imp}) => {
+      const ic = imp>2?'var(--success)':imp>0?'var(--accent2)':'var(--text3)';
+      return '<span style="font-size:10px;color:'+ic+';white-space:nowrap">'
+        + f + ': <b>'+(imp>=0?'+':'')+imp.toFixed(1)+'%</b></span>';
+    }).join('<br>');
     return '<tr>'
       +'<td style="font-size:12px;color:var(--text3);font-family:var(--mono)">#'+(i+1)+'</td>'
       +'<td>'+badges+'</td>'
       +'<td style="font-size:12px;white-space:nowrap">'+modelIcon(r.model)+' '+r.model+'</td>'
       +'<td><div style="display:flex;align-items:center;gap:6px"><div style="width:60px;height:5px;background:var(--border);border-radius:3px"><div style="height:100%;width:'+bw+'%;background:'+r2Color(r.r2)+';border-radius:3px"></div></div><span style="font-family:var(--mono);font-size:13px;font-weight:700;color:'+r2Color(r.r2)+'">'+r.r2+'%</span></div></td>'
       +'<td style="font-family:var(--mono);font-size:12px">'+fmt(r.mae)+'</td>'
+      +'<td style="font-size:11px;line-height:1.6">'+impCell+'</td>'
       +'<td style="white-space:nowrap">'
       +'<button data-tidx="'+i+'" data-train="0" style="padding:3px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;cursor:pointer;font-size:11px;margin-right:4px">Apply</button>'
       +'<button data-tidx="'+i+'" data-train="1" style="padding:3px 8px;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600">Use &amp; Train</button>'
       +'</td>'
       +'</tr>';
   }).join('');
-  // Wire buttons via event delegation — no inline JS, no quote issues
+  // Wire buttons via event delegation
   document.getElementById('tune-tbody').querySelectorAll('button[data-tidx]').forEach(btn => {
     btn.addEventListener('click', () => {
       const r = _allTuneResults[+btn.dataset.tidx];
@@ -3585,13 +4129,14 @@ function saveTunePreset() {
   const target  = document.getElementById('tune-target')?.value || '';
   const minF    = document.getElementById('tune-min-features')?.value || '1';
   const maxF    = document.getElementById('tune-max-features')?.value || '4';
+  const gapV    = document.getElementById('tune-gap')?.value || '5';
   const parC    = document.getElementById('tune-parallel-combos')?.value || '1';
   const nThr    = document.getElementById('tune-n-threads')?.value || '1';
   const nJobs   = document.getElementById('tune-n-jobs')?.value || '-1';
   const nWork   = document.getElementById('tune-n-workers')?.value || '1';
   const wId     = document.getElementById('tune-worker-id')?.value || '1';
   const reqd    = [...document.querySelectorAll('#tune-feature-list input[data-required="1"]')].map(c => c.value);
-  localStorage.setItem('realtyiq_tune_preset', JSON.stringify({ checked, target, minF, maxF, parC, nThr, nJobs, nWork, wId, required: reqd }));
+  localStorage.setItem('realtyiq_tune_preset', JSON.stringify({ checked, target, minF, maxF, gapV, parC, nThr, nJobs, nWork, wId, required: reqd }));
   showToast('Tuning preset saved', 'success');
 }
 function restoreTunePreset() {
@@ -3604,6 +4149,7 @@ function restoreTunePreset() {
     if (p.target) { const s = document.getElementById('tune-target'); if(s) s.value = p.target; }
     if (p.minF)   { const s = document.getElementById('tune-min-features'); if(s) s.value = p.minF; }
     if (p.maxF)   { const s = document.getElementById('tune-max-features'); if(s) s.value = p.maxF; }
+    if (p.gapV)   { const s = document.getElementById('tune-gap');             if(s) s.value = p.gapV; }
     if (p.parC)   { const s = document.getElementById('tune-parallel-combos'); if(s) s.value = p.parC; }
     if (p.nThr)   { const s = document.getElementById('tune-n-threads');       if(s) s.value = p.nThr; }
     if (p.nJobs)  { const s = document.getElementById('tune-n-jobs');          if(s) s.value = p.nJobs; }
@@ -3619,9 +4165,153 @@ function restoreTunePreset() {
     showToast('Restored: ' + (p.checked?.length||0) + ' features', 'success');
   } catch(e) { showToast('Could not restore', 'error'); }
 }
+function renderFeatureFreq(results) {
+  const topN_freq = Math.min(results.length, 30);
+  const topRes    = results.slice(0, topN_freq);
+  // Size-controlled impact
+  const _fImpFreq = computeFeatureImpact(topRes);
+  const freq = {};
+  topRes.forEach(r => r.features.forEach(f => freq[f] = (freq[f]||0)+1));
+  const allFeats = Object.keys(freq);
+  const impact = {};
+  allFeats.forEach(f => { impact[f] = _fImpFreq[f]?.imp || 0; });
+  const globalAvg = topRes.reduce((s,r)=>s+r.r2,0)/(topRes.length||1);
+
+  // Sort by impact descending
+  const sorted = allFeats.sort((a,b) => (impact[b]||0) - (impact[a]||0));
+  const maxImp = Math.max(...sorted.map(f => Math.abs(impact[f]||0)), 0.1);
+
+  const panel = document.getElementById('tune-freq-panel');
+  const bars  = document.getElementById('tune-freq-bars');
+  const count = document.getElementById('tune-freq-count');
+  if (!panel) return;
+  panel.style.display = 'block';
+  count.textContent   = 'top ' + topN_freq + ' configs';
+
+  bars.innerHTML = '<div style="font-size:10px;color:var(--text3);margin-bottom:10px">R² impact = avg R² of configs WITH this feature − global average ('+globalAvg.toFixed(1)+'%)</div>'
+    + sorted.map(f => {
+      const imp     = impact[f] || 0;
+      const pctFreq = Math.round(freq[f] / topN_freq * 100);
+      const barW    = Math.round(Math.abs(imp) / maxImp * 100);
+      const color   = imp > 2 ? 'var(--success)' : imp > 0 ? 'var(--accent)' : 'var(--danger)';
+      const impStr  = (imp >= 0 ? '+' : '') + imp.toFixed(2) + '%';
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">'
+        + '<span style="min-width:140px;font-size:12px;color:var(--text);text-align:right;font-weight:'+(imp>2?'600':'400')+'">' + f + '</span>'
+        + '<div style="flex:1;background:var(--border);border-radius:4px;height:20px;position:relative;min-width:60px">'
+        + '<div style="height:100%;width:'+barW+'%;background:'+color+';border-radius:4px;opacity:0.85"></div>'
+        + '<span style="position:absolute;left:6px;top:2px;font-size:11px;font-family:var(--mono);font-weight:700;color:#fff;line-height:16px;text-shadow:0 1px 2px rgba(0,0,0,.5)">'+impStr+'</span>'
+        + '</div>'
+        + '<span style="min-width:36px;font-size:10px;color:var(--text3);text-align:right">'+pctFreq+'%</span>'
+        + '</div>';
+    }).join('');
+}
+
+// Show cached indicator in progress text
+function markCachedBatch(isCached) {
+  if (isCached) {
+    const el = document.getElementById('tune-progress-text');
+    if (el && !el.textContent.includes('cached')) {
+      el.textContent = el.textContent + '  ⚡ cached';
+    }
+  }
+}
 // =================== END TUNING ===================
 
 
+// =================== EXPORT / IMPORT SETTINGS ===================
+function exportSettings() {
+  const checked   = [...document.querySelectorAll('#pred-feature-list input:checked')].map(c=>c.value);
+  const target    = document.getElementById('target-col')?.value || '';
+  const model     = document.getElementById('model-type')?.value || '';
+  const useLog    = document.getElementById('log-target')?.checked ?? true;
+  const rmOut     = document.getElementById('remove-outliers')?.checked ?? true;
+  const filters   = typeof getGlobalFilters === 'function' ? getGlobalFilters() : {};
+  // Tuning settings
+  const tuneChecked = [...document.querySelectorAll('#tune-feature-list input:checked')].map(c=>c.value);
+  const tuneReq     = [...document.querySelectorAll('#tune-feature-list input[data-required="1"]')].map(c=>c.value);
+  const minF  = document.getElementById('tune-min-features')?.value || '1';
+  const maxF  = document.getElementById('tune-max-features')?.value || '4';
+  const gap   = document.getElementById('tune-gap')?.value || '5';
+  const nj    = document.getElementById('tune-n-jobs')?.value || '-1';
+  const nw    = document.getElementById('tune-n-workers')?.value || '1';
+  const batch = document.getElementById('tune-parallel-combos')?.value || '1';
+  const obj = { prediction: { features: checked, target, model, useLog, rmOut, filters },
+                tuning:     { features: tuneChecked, required: tuneReq, minF, maxF, gap, nj, nw, batch } };
+  const text = JSON.stringify(obj, null, 2);
+  navigator.clipboard.writeText(text).then(
+    () => showToast('Settings copied to clipboard', 'success'),
+    () => { prompt('Copy these settings:', text); }
+  );
+}
+
+function importSettings() {
+  const text = prompt('Paste settings JSON:');
+  if (!text) return;
+  try {
+    const obj = JSON.parse(text);
+    // Apply prediction settings
+    if (obj.prediction) {
+      const p = obj.prediction;
+      const featSet = new Set(p.features || []);
+      document.querySelectorAll('#pred-feature-list input').forEach(cb => {
+        cb.checked = featSet.has(cb.value);
+        cb.closest('label').style.opacity = cb.checked ? '1' : '0.4';
+      });
+      if (p.target) { const s = document.getElementById('target-col'); if(s) s.value = p.target; }
+      if (p.model)  { const s = document.getElementById('model-type');  if(s) s.value = p.model; }
+      // Apply filters
+      if (p.filters && typeof p.filters === 'object') {
+        Object.entries(p.filters).forEach(([k,v]) => {
+          const el = document.getElementById('gf-'+k);
+          if (!el) return;
+          const vals = new Set(Array.isArray(v) ? v : [v]);
+          el.querySelectorAll('input').forEach(cb => cb.checked = vals.has(cb.value));
+        });
+        if (typeof applyGlobalFilters === 'function') applyGlobalFilters();
+      }
+    }
+    // Apply tuning settings
+    if (obj.tuning) {
+      const t = obj.tuning;
+      const tSet = new Set(t.features || []);
+      const rSet = new Set(t.required || []);
+      document.querySelectorAll('#tune-feature-list input').forEach(cb => {
+        cb.checked = tSet.has(cb.value);
+        if (rSet.has(cb.value)) { cb.dataset.required = '1'; markRequiredLabel(cb); }
+      });
+      if (t.minF)  { const s=document.getElementById('tune-min-features'); if(s) s.value=t.minF; }
+      if (t.maxF)  { const s=document.getElementById('tune-max-features'); if(s) s.value=t.maxF; }
+      if (t.gap)   { const s=document.getElementById('tune-gap');          if(s) s.value=t.gap; }
+      if (t.nj)    { const s=document.getElementById('tune-n-jobs');       if(s) s.value=t.nj; }
+      if (t.nw)    { const s=document.getElementById('tune-n-workers');    if(s) s.value=t.nw; updateWorkerOptions(); }
+      if (t.batch) { const s=document.getElementById('tune-parallel-combos'); if(s) s.value=t.batch; }
+      if (typeof updateTuneEstimate === 'function') updateTuneEstimate();
+    }
+    showToast('Settings imported', 'success');
+  } catch(e) { showToast('Invalid settings JSON', 'error'); }
+}
+function showCommonTuningCombo() {
+  const panel = document.getElementById('pred-common-combo');
+  const text  = document.getElementById('pred-common-combo-text');
+  if (!panel || !_allTuneResults?.length) return;
+  const top10 = _allTuneResults.slice(0,10);
+  const freq  = {};
+  top10.forEach(r => r.features.forEach(f => freq[f] = (freq[f]||0)+1));
+  const topFeats = Object.entries(freq).sort((a,b)=>b[1]-a[1])
+                     .filter(([,c]) => c >= top10.length*0.4).map(([f])=>f);
+  if (!topFeats.length) { panel.style.display='none'; return; }
+  const algos = {};
+  top10.forEach(r => algos[r.model] = (algos[r.model]||0)+1);
+  const bestAlgo = Object.entries(algos).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
+  const icon = bestAlgo.includes('Forest')?'🌲':bestAlgo.includes('Boost')?'🚀':'📈';
+  panel.style.display = 'block';
+  text.innerHTML = '<b>'+icon+' '+bestAlgo+'</b>: '
+    + topFeats.map(f => {
+        const pct = Math.round((freq[f]||0)/top10.length*100);
+        return '<span style="display:inline-block;margin:1px 3px;padding:1px 6px;background:var(--surface2);border-radius:4px;font-size:11px">'
+          + f + ' <span style="color:var(--success);font-size:9px">'+pct+'%</span></span>';
+      }).join('');
+}
 // =================== LOCALSTORAGE PERSISTENCE ===================
 const LS_FEATURES   = 'realtyiq_feature_preset';
 const LS_FILTER     = 'realtyiq_global_filter';
@@ -3694,6 +4384,42 @@ zone.addEventListener('drop', e => {
   zone.classList.remove('drag');
   const file = e.dataTransfer.files[0];
   if (file) uploadFile(file);
+});
+
+// On page load: check if server has auto-loaded data (from data/ads + data/sold folders)
+window.addEventListener('load', async () => {
+  // Always call loadFileManager to show file panel if data exists
+  loadFileManager();
+  try {
+    const r = await fetch('/api/upload_meta');
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data.error || !data.rows) return;
+    appData = data; appData._initialized = true;
+    updateUploadZone('auto-loaded', data);
+    setupCorrelationUI(data);
+    setupPredictionUI(data);
+    setupImpactUI(data);
+    setupSegmentUI(data);
+    setupCityFilter(data);
+    setupTuningUI(data);       // builds tune feature list + restores preset
+    loadSavedModelsList();
+    setupCatFilters(data);
+    setupOvervaluedFilters(data);
+    appData._city_to_districts = data.city_to_districts || {};
+    setStatus(true, `${data.rows} rows · ${data.columns} columns (auto-loaded)`);
+    showToast(`Auto-loaded: ${data.rows} rows`, 'success');
+    const fm = document.getElementById('file-manager');
+    if (fm) fm.style.display = 'block';
+    loadFileManager();
+    // Restore global filter after UI is set up
+    setTimeout(loadGlobalFilter, 200);
+    // Show derived features
+    const _dr = ['age','lot_ratio','room_density','bath_ratio','has_view','has_fireplace',
+                 'has_cooling','has_parking_feat','has_appliances','has_interior'];
+    const _drFound = _dr.filter(c => data.numeric_columns.includes(c));
+    if (_drFound.length) setTimeout(() => showToast('✨ Auto-created ' + _drFound.length + ' derived features: ' + _drFound.join(', '), 'success'), 1000);
+  } catch(e) { console.warn('autoload:', e); }
 });
 </script>
 </body>
