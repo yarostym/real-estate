@@ -3198,7 +3198,25 @@ function setupTuningUI(data) {
       const nb = pct > 0 ? '<span style="font-size:10px;color:'+(pct>40?'var(--danger)':'var(--text3)')+';margin-left:4px">'+pct+'% null</span>' : '';
       list.innerHTML += '<label class="check-item" style="'+(ok?'':'opacity:0.5')+'"><input type="checkbox" value="'+col+'" '+(ok?'checked':'')+' onchange="updateTuneEstimate()">'+col+nb+'</label>';
     });
-  setTimeout(updateTuneEstimate, 100);
+  setTimeout(() => {
+    // Auto-restore saved preset (after checkboxes are built)
+    const raw = localStorage.getItem('realtyiq_tune_preset');
+    if (raw) {
+      try {
+        const p = JSON.parse(raw);
+        const cs = new Set(p.checked || []);
+        let restored = 0;
+        document.querySelectorAll('#tune-feature-list input').forEach(cb => {
+          cb.checked = cs.has(cb.value);
+          restored += cb.checked ? 1 : 0;
+        });
+        if (p.target) { const s = document.getElementById('tune-target'); if(s) s.value = p.target; }
+        if (p.minF)   { const s = document.getElementById('tune-min-features'); if(s) s.value = p.minF; }
+        if (p.maxF)   { const s = document.getElementById('tune-max-features'); if(s) s.value = p.maxF; }
+      } catch(e) {}
+    }
+    updateTuneEstimate();
+  }, 100);
 }
 function tuneCheckAll(state) {
   document.querySelectorAll('#tune-feature-list input').forEach(cb => cb.checked = state);
