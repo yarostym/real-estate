@@ -16,13 +16,18 @@ app = Flask(__name__)
 uploaded_data = {}
 
 def clean_dataframe(df):
-    """Coerce columns to numeric only when >= 80% of values look numeric."""
+    """Coerce columns to numeric when >= 80% of values look numeric.
+    Strips common unit suffixes (ft, sqft, m, km, kg, lb, %) before parsing."""
+    unit_pattern = r'\s*(ft\.?|sqft|sq\.?\s*ft\.?|m2?|km|kg|lb|lbs|%|acres?|ha)\s*$'
     for col in df.columns:
-        converted = pd.to_numeric(
-            df[col].astype(str).str.replace(',', '.').str.replace(' ', ''),
-            errors='coerce'
-        )
-        if converted.notna().sum() / max(len(df), 1) >= 0.8:
+        s = df[col].astype(str).str.strip()
+        # Strip unit suffixes then commas/spaces
+        s_clean = s.str.replace(unit_pattern, '', regex=True, case=False)
+        s_clean = s_clean.str.replace(',', '.').str.replace(' ', '')
+        converted = pd.to_numeric(s_clean, errors='coerce')
+        # Use non-null rows as denominator — sparse columns (many NaN) should still convert
+        non_null = (df[col].notna() & (df[col].astype(str).str.strip().isin(['', 'nan']) == False)).sum()
+        if non_null > 0 and converted.notna().sum() / non_null >= 0.8:
             df[col] = converted
     return df
 

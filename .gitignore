@@ -1,4 +1,5 @@
 data/
+saved_models/
 venv/
 __pycache__/
 *.pyc
