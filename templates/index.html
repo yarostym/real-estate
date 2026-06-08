@@ -1202,9 +1202,29 @@
       <div class="section-label">Target Variable</div>
       <select id="tune-target"></select>
       <div class="section-label">Candidate Features</div>
-      <div style="display:flex;gap:6px;margin-bottom:6px">
+      <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
         <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="tuneCheckAll(true)">All</button>
         <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="tuneCheckAll(false)">None</button>
+        <button id="smart-select-btn" onclick="runSmartFeatureSelect()"
+                style="padding:4px 10px;font-size:11px;background:var(--accent);color:#000;border:none;border-radius:6px;cursor:pointer;font-weight:600"
+                title="Train RF on all features → keep only impactful ones">
+          ✨ Smart Select
+        </button>
+      </div>
+      <!-- Smart select result panel -->
+      <div id="smart-select-panel" style="display:none;margin-bottom:10px;padding:8px 10px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;font-size:11px">
+        <div style="font-weight:600;color:var(--text);margin-bottom:6px">Feature importance (all features trained)</div>
+        <div id="smart-select-bars"></div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+          <span style="color:var(--text3)">Threshold:</span>
+          <input type="number" id="smart-threshold" value="0.5" min="0.1" max="10" step="0.1"
+                 style="width:60px;padding:3px 6px;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:11px">
+          <span style="color:var(--text3)">%</span>
+          <button onclick="applySmartSelection()"
+                  style="padding:3px 10px;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600">
+            Apply
+          </button>
+        </div>
       </div>
       <div class="checkbox-list" id="tune-feature-list"></div>
       <div class="section-label">Feature combination size</div>
@@ -3870,6 +3890,80 @@ function modelIcon(m) { return m.includes('Forest')?'🌲':m.includes('Boost')?'
 // Store all tune results stably for button access
 let _allTuneResults = [];
 
+// =================== SMART FEATURE SELECTION ===================
+let _smartRanked = [];
+
+async function runSmartFeatureSelect() {
+  const btn = document.getElementById('smart-select-btn');
+  btn.disabled = true; btn.textContent = '⏳ Analysing...';
+  const target = document.getElementById('tune-target')?.value || 'price';
+  try {
+    const r = await fetch('/api/smart_feature_select', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        target_column: target,
+        threshold: parseFloat(document.getElementById('smart-threshold')?.value || '0.5'),
+        use_log_target: document.getElementById('tune-log')?.checked ?? true,
+        remove_outliers: document.getElementById('tune-outliers')?.checked ?? true,
+      })
+    });
+    const d = await r.json();
+    if (d.error) { showToast(d.error, 'error'); return; }
+    _smartRanked = d.ranked || [];
+    renderSmartSelectBars(d);
+    document.getElementById('smart-select-panel').style.display = 'block';
+    showToast('Analysed ' + d.total_tested + ' features (R²=' + (d.r2_train*100).toFixed(1) + '%)', 'success');
+  } catch(e) { showToast('Error: '+e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '✨ Smart Select'; }
+}
+
+function renderSmartSelectBars(d) {
+  const bars  = document.getElementById('smart-select-bars');
+  const threshold = parseFloat(document.getElementById('smart-threshold')?.value || '0.5');
+  const ranked = d.ranked || _smartRanked;
+  const maxImp = ranked[0]?.[1] || 1;
+  bars.innerHTML = ranked.map(([f, pct]) => {
+    const barW  = Math.round(pct / maxImp * 100);
+    const color = pct >= 5 ? 'var(--success)' : pct >= 1 ? 'var(--accent)' : pct >= threshold ? 'var(--accent3)' : 'var(--border2)';
+    const dim   = pct < threshold ? 'opacity:0.45' : '';
+    return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;'+dim+'">'
+      + '<span style="min-width:110px;font-size:10px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+f+'</span>'
+      + '<div style="flex:1;background:var(--border);border-radius:3px;height:12px;position:relative;min-width:30px">'
+      + '<div style="height:100%;width:'+barW+'%;background:'+color+';border-radius:3px"></div>'
+      + '</div>'
+      + '<span style="min-width:38px;font-size:10px;font-family:var(--mono);color:'+color+';text-align:right">'+pct+'%</span>'
+      + '</div>';
+  }).join('');
+}
+
+function applySmartSelection() {
+  if (!_smartRanked.length) return;
+  const threshold = parseFloat(document.getElementById('smart-threshold')?.value || '0.5');
+  const selected  = new Set(_smartRanked.filter(([,pct]) => pct >= threshold).map(([f]) => f));
+  // Always include top 3
+  _smartRanked.slice(0,3).forEach(([f]) => selected.add(f));
+  let applied = 0;
+  document.querySelectorAll('#tune-feature-list input[type=checkbox]').forEach(cb => {
+    const inSet = selected.has(cb.value);
+    if (cb.dataset.required !== '1') {
+      cb.checked = inSet;
+      if (inSet) applied++;
+    }
+    cb.closest('label').style.opacity = inSet ? '1' : '0.4';
+  });
+  updateTuneEstimate();
+  showToast('Selected ' + applied + ' features above ' + threshold + '%', 'success');
+  // Re-render bars with updated threshold
+  renderSmartSelectBars({ranked: _smartRanked});
+}
+
+// Re-render when threshold changes
+document.addEventListener('input', e => {
+  if (e.target.id === 'smart-threshold' && _smartRanked.length) {
+    renderSmartSelectBars({ranked: _smartRanked});
+  }
+});
+// =================== END SMART FEATURE SELECTION ===================
 function computeFeatureImpact(results) {
   // Size-controlled impact: compare features within same combo size
   // Avoids bias where large combos tend to score higher

@@ -2629,5 +2629,107 @@ def autoload_once():
         except Exception as _e:
             print(f'[autoload] failed: {_e}')
 
+
+@app.route('/api/smart_feature_select', methods=['POST'])
+def smart_feature_select():
+    """
+    Train RF on all available features, return ranked importances.
+    Client uses this to pre-select Tuning candidates above a threshold.
+    Uses proper target encoding (same as train_model) for accuracy.
+    """
+    df = get_working_df()
+    if df is None:
+        return jsonify({'error': 'No data loaded'}), 400
+
+    data       = request.json or {}
+    target_col = data.get('target_column', 'price')
+    threshold  = float(data.get('threshold', 0.5))   # min importance % to include
+    use_log    = data.get('use_log_target', True)
+    rm_out     = data.get('remove_outliers', True)
+
+    # Candidate features: all numeric + categorical (skip IDs/URLs/internal)
+    skip = {'listing_id','real_mls','mls','summary_url','virtual_tour','street',
+            '_source','_file_type','_sample_weight',target_col}
+    candidate_cols = [
+        c for c in df.columns
+        if c not in skip
+        and not any(x in c.lower() for x in ['url','link','photo','id','agent','brokerage','email'])
+        and df[c].notna().mean() > 0.3
+    ]
+
+    if not candidate_cols:
+        return jsonify({'error': 'No usable columns found'}), 400
+
+    # Encode using same logic as train_model
+    df_m = df[candidate_cols + [target_col]].copy()
+    df_m[target_col] = pd.to_numeric(df_m[target_col], errors='coerce')
+    df_m = df_m.dropna(subset=[target_col]).reset_index(drop=True)
+    y = df_m[target_col].values.astype(float)
+    if rm_out:
+        q1, q3 = np.percentile(y, 25), np.percentile(y, 75)
+        mask = (y >= q1-3*(q3-q1)) & (y <= q3+3*(q3-q1))
+        df_m, y = df_m[mask].reset_index(drop=True), y[mask]
+    if len(y) < 20:
+        return jsonify({'error': 'Too few rows after filtering'}), 400
+
+    y_fit = np.log1p(y) if (use_log and np.all(y > 0)) else y
+
+    X_cols, feat_names = [], []
+    for col in candidate_cols:
+        if col not in df_m.columns: continue
+        cd = df_m[col]
+        if not pd.api.types.is_numeric_dtype(cd):
+            cd = cd.fillna('Unknown')
+            if is_multi_value_col(cd):
+                arr, vals = ohe_multi_value(cd)
+                for k, v in enumerate(vals):
+                    X_cols.append(arr[:, k])
+                    feat_names.append(f'{col}__{v}')
+            elif cd.nunique() > 15:
+                enc_med, enc_ppsf, _ = target_encode(df_m.assign(**{col:cd}), col, target_col)
+                X_cols.append(enc_med.values); feat_names.append(col)
+                if enc_ppsf is not None:
+                    X_cols.append(enc_ppsf.values); feat_names.append(f'{col}_ppsf')
+            else:
+                from sklearn.preprocessing import LabelEncoder as _LE
+                X_cols.append(_LE().fit_transform(cd.astype(str)).astype(float)); feat_names.append(col)
+        else:
+            num = pd.to_numeric(cd, errors='coerce')
+            X_cols.append(num.fillna(num.median() if num.notna().any() else 0).values.astype(float))
+            feat_names.append(col)
+
+    if not X_cols:
+        return jsonify({'error': 'Could not encode features'}), 400
+
+    X = np.column_stack(X_cols).astype(float)
+    rf = RandomForestRegressor(n_estimators=200, min_samples_leaf=2, random_state=42, n_jobs=-1)
+    rf.fit(X, y_fit)
+
+    # Aggregate importances back to original columns (OHE cols → parent col)
+    raw_imp = rf.feature_importances_
+    col_imp = {}
+    for name, imp in zip(feat_names, raw_imp):
+        base = name.split('__')[0].replace('_ppsf','')
+        col_imp[base] = col_imp.get(base, 0) + imp
+
+    total = sum(col_imp.values()) or 1
+    ranked = sorted(col_imp.items(), key=lambda x: -x[1])
+    ranked_pct = [(col, round(imp/total*100, 2)) for col, imp in ranked]
+
+    # Which original candidate cols to include
+    selected = [col for col, pct in ranked_pct if pct >= threshold]
+    # Always include top-3 even if below threshold
+    for col, _ in ranked_pct[:3]:
+        if col not in selected:
+            selected.append(col)
+
+    return jsonify({
+        'ranked':   ranked_pct,       # [(col, importance_pct), ...]
+        'selected': selected,          # cols above threshold
+        'threshold': threshold,
+        'total_tested': len(candidate_cols),
+        'r2_train': round(float(rf.score(X, y_fit)), 4),
+    })
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
