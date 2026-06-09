@@ -1,4 +1,4 @@
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Profile-blue)](https://www.linkedin.com/in/yarostym/)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Profile-blue)](https://www.linkedin.com/in/yarostym/) [https://www.linkedin.com/in/yarostym/](https://www.linkedin.com/in/yarostym/)
 
 # RealtyIQ — Real Estate Analytics
 
