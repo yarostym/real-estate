@@ -1,3 +1,5 @@
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Profile-blue)](https://www.linkedin.com/in/yarostym/)
+
 # RealtyIQ — Real Estate Analytics
 
 ML-powered real estate price analysis tool. Train models on sold data, find undervalued and overvalued listings, tune feature combinations, and predict prices.
