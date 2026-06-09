@@ -154,11 +154,35 @@ def clean_dataframe(df):
 
 _INTERNAL_COLS = {'_source', '_file_type', '_sample_weight'}
 
+# Columns that are always hidden from feature lists (PII + metadata)
+_ALWAYS_HIDE_COLS = {
+    '_source','_file_type','_sample_weight',
+    'listing_id','real_mls',
+    'street','address','postal_code','zip_code',
+    'listing_agent','listing_agent_phone','listing_agent_brokerage',
+    'selling_agent','selling_agent_brokerage','selling_agent_phone',
+    'summary_url','virtual_tour','photo_count','photos',
+    'description','strata_details','lot_dimensions',
+    'sold_date','listing_date','province','province_code',
+    'exposure','construction_materials','foundation',
+    'ownership',
+}
+
+def _is_hidden_col(col):
+    cl = col.lower()
+    return col in _ALWAYS_HIDE_COLS or any(x in cl for x in [
+        'agent','brokerage','phone','email','url','link','description',
+        'lot_dimension','photo','strata_detail','province',
+        'sold_date','listing_date','postal','zip','address','street',
+    ])
+
 def get_numeric_columns(df):
-    return [c for c in df.select_dtypes(include=[np.number]).columns if c not in _INTERNAL_COLS]
+    return [c for c in df.select_dtypes(include=[np.number]).columns
+            if c not in _INTERNAL_COLS and not _is_hidden_col(c)]
 
 def get_categorical_columns(df):
-    return [c for c in df.select_dtypes(exclude=[np.number]).columns if c not in _INTERNAL_COLS]
+    return [c for c in df.select_dtypes(exclude=[np.number]).columns
+            if c not in _INTERNAL_COLS and not _is_hidden_col(c)]
 
 def correlation_strength(val):
     if val >= 0.9: return 'very strong'
@@ -205,18 +229,58 @@ def get_nearby_cities(city):
 # ── Upload ────────────────────────────────────────────────────────────────────
 @app.route('/api/toggle_demo', methods=['POST'])
 def toggle_demo():
-    uploaded_data['demo_mode'] = not uploaded_data.get('demo_mode', False)
-    return jsonify({'demo_mode': uploaded_data['demo_mode']})
+    uploaded_data['privacy_mode'] = not uploaded_data.get('privacy_mode', False)
+    # Reset alias maps when toggling so aliases restart fresh
+    if uploaded_data['privacy_mode']:
+        uploaded_data['_privacy_maps'] = {'city': {}, 'district': {}, 'address': {}}
+    return jsonify({'privacy_mode': uploaded_data['privacy_mode'], 'demo_mode': uploaded_data['privacy_mode']})
+
+# Columns always hidden in privacy mode (regardless of context)
+_PRIVACY_HIDDEN = {
+    'url','link','mls','real_mls','agent','brokerage','phone','email',
+    'virtual_tour','summary_url','listing_id',
+    'listing_agent','listing_agent_phone','listing_agent_brokerage',
+    'selling_agent','selling_agent_brokerage','selling_agent_phone',
+    'postal_code','zip_code','description','strata_details',
+    'sold_date','listing_date','province','province_code',
+    'lot_dimensions','photo_count','photos','exposure',
+    'construction_materials','foundation',
+}
+
+def mask_value(k, v):
+    """Apply privacy masking to a single key-value pair.
+    Returns masked value. Call only when privacy_mode is ON."""
+    if not isinstance(v, str) or not v or v in ('nan','None','HIDDEN'):
+        return v
+    pm = uploaded_data.setdefault('_privacy_maps', {'city':{},'district':{},'address':{}})
+
+    def alias(d, val, prefix):
+        if val not in d: d[val] = f'{prefix} {len(d)+1}'
+        return d[val]
+
+    kl = k.lower()
+    # Hard hide
+    if kl in _PRIVACY_HIDDEN or any(x in kl for x in
+        ['url','link','mls','agent','brokerage','phone','email','tour',
+         'listing_id','postal','zip','description','strata_detail',
+         'sold_date','listing_date','province','photo','exposure',
+         'construction','foundation','lot_dimension']):
+        return 'HIDDEN'
+    # Street / address
+    if any(x in kl for x in ['street','address']):
+        return alias(pm['address'], v, 'Address #')
+    # City
+    if kl in ('city','municipality','town','cities'):
+        return alias(pm['city'], v, 'City')
+    # District
+    if any(x in kl for x in ['district','neighborhood','neighbourhood','suburb']):
+        return alias(pm['district'], v, 'District')
+    return v
 
 def mask_row(row):
-    if not uploaded_data.get('demo_mode'): return row
-    masked = dict(row)
-    for k in list(masked.keys()):
-        kl = k.lower()
-        if any(x in kl for x in ['street','address','url','link','mls','agent','brokerage','phone','email','tour']):
-            if isinstance(masked[k], str) and masked[k]:
-                masked[k] = 'HIDDEN'
-    return masked
+    """Privacy mode: anonymise a result row dict."""
+    if not uploaded_data.get('privacy_mode'): return row
+    return {k: mask_value(k, v) for k, v in row.items()}
 
 @app.route('/api/upload', methods=['POST'])
 def upload_csv():
@@ -513,6 +577,24 @@ def train_model():
     # Strip target_col and internal columns from features
     _internal = {'_source', '_file_type', '_sample_weight'}
     feature_cols = [c for c in feature_cols if c != target_col and c not in _internal]
+
+    # Auto-exclude features that leak future information when target=sold_price
+    # ppsf = price / floor_area_sqft
+    # → if BOTH ppsf and floor_area_sqft are selected, model can reconstruct price → leak
+    # → also leaky if price itself is in features
+    _direct_leaky   = {'price', 'list_price', 'asking_price', 'price_discount_pct'}
+    _leaked_removed = []
+    if target_col in ('sold_price', 'sold_price_adjusted'):
+        has_direct = any(c in feature_cols for c in _direct_leaky)
+        has_sqft   = any(c in feature_cols for c in ['floor_area_sqft','sqft','floor_area'])
+        to_remove  = set(_direct_leaky)
+        # ppsf is leaky if price is present OR if floor_area is present (ppsf × sqft = price)
+        if has_direct or has_sqft:
+            to_remove.add('ppsf')
+        _leaked_removed = [c for c in feature_cols if c in to_remove]
+        if _leaked_removed:
+            feature_cols = [c for c in feature_cols if c not in to_remove]
+
     if not feature_cols:
         return jsonify({'error': 'No feature columns selected'}), 400
 
@@ -657,8 +739,9 @@ def train_model():
                 y_all  = np.expm1(y_fit) if use_log else y_fit
                 r2_cv  = float(r2_score(y_all, cv_p))
                 mae_cv = float(mean_absolute_error(y_all, cv_p))
+                mape_cv = float(np.mean(np.abs((y_all - cv_p) / np.where(y_all==0,1,y_all))) * 100)
             except Exception:
-                r2_cv = mae_cv = None
+                r2_cv = mae_cv = mape_cv = None
 
         # Feature importance
         if hasattr(model, 'feature_importances_'):
@@ -699,6 +782,7 @@ def train_model():
             'train_size':       train_n,
             'test_size':        test_n,
             'outliers_removed': outliers_removed,
+            'leaked_features_removed': _leaked_removed,
         }
         uploaded_data['n_rows'] = train_n + test_n
 
@@ -756,6 +840,7 @@ def train_model():
             'mae':                 round(mae, 2),
             'r2_cv':               round(r2_cv, 4) if r2_cv is not None else None,
             'mae_cv':              round(mae_cv, 2) if mae_cv is not None else None,
+            'mape_cv':             round(mape_cv, 2) if mape_cv is not None else None,
             'eval_r2':             eval_r2,
             'eval_mae':            eval_mae,
             'eval_n':              eval_n,
@@ -764,6 +849,7 @@ def train_model():
             'train_size':          train_n,
             'test_size':           test_n,
             'outliers_removed':    outliers_removed,
+            'leaked_features_removed': _leaked_removed,
             'feature_importance':  feature_importance,
             'actual_vs_predicted': actual_vs_pred,
             'encoders':            {k: {
@@ -1237,7 +1323,7 @@ def undervalued():
     min_baths    = data.get('min_baths')   # None = no filter
 
     # add address/street/mls for display if present
-    display_cols = [c for c in ['street','district','city','real_mls','property_type','bedrooms','bathrooms','floor_area_sqft','summary_url'] if c in df.columns]
+    display_cols = [c for c in ['street','district','city','real_mls','property_type','bedrooms','bathrooms','floor_area_sqft','summary_url'] if c in df.columns and c not in _ALWAYS_HIDE_COLS]
     df_score = df[feature_cols + [target_col] + [c for c in display_cols if c not in feature_cols + [target_col]]].copy()
 
     df_score = df_score.dropna(subset=[target_col]).reset_index(drop=True)
@@ -1346,16 +1432,21 @@ def undervalued():
             _mean = np.abs(_tree_preds.mean(axis=0)) + 1
             pred_cv = _std / _mean  # lower = more stable
 
-        # Compute confidence: how many training rows share the same district/city
-        df_train = get_working_df()
+        # Compute confidence: use TRAINING data (same source as model)
         city_col_name = uploaded_data.get('city_col', 'city')
         district_counts = {}
         city_counts      = {}
-        if df_train is not None:
-            if 'district' in df_train.columns:
-                district_counts = df_train['district'].value_counts().to_dict()
-            if city_col_name in df_train.columns:
-                city_counts = df_train[city_col_name].value_counts().to_dict()
+        _train_src = model_data.get('train_source', '')
+        df_all_w = get_working_df()
+        if df_all_w is not None:
+            if _train_src and '_source' in df_all_w.columns:
+                df_train_conf = df_all_w[df_all_w['_source']==_train_src]
+            else:
+                df_train_conf = df_all_w
+            if 'district' in df_train_conf.columns:
+                district_counts = df_train_conf['district'].value_counts().to_dict()
+            if city_col_name in df_train_conf.columns:
+                city_counts = df_train_conf[city_col_name].value_counts().to_dict()
 
         # Build results
         rows = []
@@ -1366,12 +1457,19 @@ def undervalued():
             city  = str(df_score[city_col_name].iloc[i]) if city_col_name in df_score.columns else ''
             n_dist = district_counts.get(dist, 0)
             n_city = city_counts.get(city, 0)
-            # Confidence: low if very few comparable listings in training data
-            confidence = 'high' if n_dist >= 10 else 'medium' if n_dist >= 4 else 'low'
             cv_i = float(pred_cv[i])
+            # Stability from RF tree disagreement (primary signal)
             if   cv_i < 0.05: stability = 'stable'
             elif cv_i < 0.12: stability = 'moderate'
             else:              stability = 'unstable'
+            # Confidence = combination of stability + data coverage
+            # stability is the main driver; data count is secondary
+            data_ok = n_dist >= 5
+            if   stability == 'stable'   and data_ok: confidence = 'high'
+            elif stability == 'stable'   and not data_ok: confidence = 'medium'
+            elif stability == 'moderate' and data_ok: confidence = 'medium'
+            elif stability == 'moderate' and not data_ok: confidence = 'low'
+            else: confidence = 'low'  # unstable always low
             row = {
                 'actual':     round(float(y_actual[i]), 0),
                 'predicted':  round(float(y_pred[i]), 0),
@@ -1425,11 +1523,17 @@ def feature_analysis():
 
     data          = request.json or {}
     target_col    = data.get('target_column')
-    feature_cols  = data.get('feature_columns', [])   # ALL features to analyse
-    selected_cols = data.get('selected_columns')       # currently checked = baseline (None → use all)
+    feature_cols  = data.get('feature_columns', [])
+    selected_cols = data.get('selected_columns')
     model_type    = data.get('model_type', 'random_forest')
     use_log       = data.get('use_log_target', True)
     remove_out    = data.get('remove_outliers', True)
+    train_source  = data.get('train_source', '')
+
+    # Use same training df as train_model
+    df_full = df
+    if train_source and '_source' in df_full.columns:
+        df = df_full[df_full['_source'] == train_source].reset_index(drop=True)
 
     if not target_col or not feature_cols:
         return jsonify({'error': 'target_column and feature_columns required'}), 400
@@ -1441,61 +1545,52 @@ def feature_analysis():
         selected_cols = feature_cols  # fallback: treat all as selected
 
     def quick_score(feat_list):
-        """Train and CV-score a model with the given feature list. Returns (r2, mae) or (None, None)."""
-        if not feat_list:
-            return None, None
-        df_m = df[feat_list + [target_col]].dropna(subset=[target_col]).reset_index(drop=True)
-        if len(df_m) < 5:
-            return None, None
-        X_cols = []
-        for col in feat_list:
-            cd = df_m[col]
-            if not pd.api.types.is_numeric_dtype(cd):
-                cd = cd.fillna('Unknown')
-                n_uniq = cd.nunique()
-                if is_multi_value_col(cd):
-                    ohe_arr, _ = ohe_multi_value(cd)
-                    for k in range(ohe_arr.shape[1]):
-                        X_cols.append(ohe_arr[:, k])
-                elif n_uniq > 15:
-                    enc_med, _, _ = target_encode(df_m.assign(**{col: cd}), col, target_col)
-                    X_cols.append(enc_med.values)
-                else:
-                    le = LabelEncoder()
-                    X_cols.append(le.fit_transform(cd.astype(str).values).astype(float))
-            else:
-                num = pd.to_numeric(cd, errors='coerce')
-                X_cols.append(num.fillna(num.median() if num.notna().any() else 0).values.astype(float))
-        if not X_cols:
-            return None, None
-        X = np.column_stack(X_cols) if len(X_cols) > 1 else X_cols[0].reshape(-1, 1)
-        y = pd.to_numeric(df_m[target_col], errors='coerce').values.astype(float)
-        valid = ~np.isnan(y)
-        X, y = X[valid], y[valid]
-        if remove_out and len(y) >= 20:
-            q1, q3 = np.percentile(y, 25), np.percentile(y, 75)
-            mask = (y >= q1 - 3*(q3-q1)) & (y <= q3 + 3*(q3-q1))
-            X, y = X[mask], y[mask]
-        if len(y) < 5:
-            return None, None
-        y_fit = np.log1p(y) if (use_log and np.all(y > 0)) else y
-        mdl = build_model(model_type)
-        n_splits = min(5, max(2, len(y) // 5))
-        cv = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+        """CV-score using IDENTICAL pipeline as train_model so numbers match exactly."""
+        if not feat_list: return None, None
         try:
-            preds = cross_val_predict(mdl, X, y_fit, cv=cv)
-            if use_log and np.all(y > 0):
-                preds = np.expm1(preds); y_eval = y
-            else:
-                y_eval = y
-            r2  = float(r2_score(y_eval, preds))
-            mae = float(mean_absolute_error(y_eval, preds))
-            return round(r2, 4), round(mae, 2)
+            df_m = df[feat_list + [target_col]].copy()
+            df_m[target_col] = pd.to_numeric(df_m[target_col], errors='coerce')
+            df_m = df_m.dropna(subset=[target_col]).reset_index(drop=True)
+            if len(df_m) < 5: return None, None
+            y = df_m[target_col].values.astype(float)
+            if remove_out and len(y) >= 20:
+                q1, q3 = np.percentile(y, 25), np.percentile(y, 75)
+                mask = (y >= q1-3*(q3-q1)) & (y <= q3+3*(q3-q1))
+                df_m, y = df_m[mask].reset_index(drop=True), y[mask]
+            if len(y) < 5: return None, None
+            y_fit = np.log1p(y) if (use_log and np.all(y > 0)) else y
+            # Exact same encoding as train_model
+            X_cols = []
+            for col in feat_list:
+                if col not in df_m.columns: continue
+                cd = df_m[col]
+                if not pd.api.types.is_numeric_dtype(cd):
+                    cd = cd.fillna('Unknown')
+                    if is_multi_value_col(cd):
+                        arr, vals = ohe_multi_value(cd)
+                        for k in range(arr.shape[1]): X_cols.append(arr[:,k])
+                    elif cd.nunique() > 15:
+                        enc_med, enc_ppsf, _ = target_encode(df_m.assign(**{col:cd}), col, target_col)
+                        X_cols.append(enc_med.values)
+                        if enc_ppsf is not None: X_cols.append(enc_ppsf.values)
+                    else:
+                        X_cols.append(LabelEncoder().fit_transform(cd.astype(str)).astype(float))
+                else:
+                    num = pd.to_numeric(cd, errors='coerce')
+                    X_cols.append(num.fillna(num.median() if num.notna().any() else 0).values.astype(float))
+            if not X_cols: return None, None
+            X = np.column_stack(X_cols) if len(X_cols) > 1 else X_cols[0].reshape(-1,1)
+            mdl = build_model(model_type)
+            kf = KFold(n_splits=5, shuffle=True, random_state=42)
+            preds = cross_val_predict(mdl, X, y_fit, cv=kf)
+            if use_log and np.all(y > 0): preds = np.expm1(preds)
+            mape = float(np.mean(np.abs((y - preds) / np.where(y==0,1,y))) * 100)
+            return round(float(r2_score(y, preds)), 4), round(float(mean_absolute_error(y, preds)), 2), round(mape, 2)
         except Exception:
-            return None, None
+            return None, None, None
 
     # Baseline: currently selected features
-    base_r2, base_mae = quick_score(selected_cols)
+    base_r2, base_mae, base_mape = quick_score(selected_cols)
 
     # Correlations with target
     corr_with_target = {}
@@ -1519,7 +1614,7 @@ def feature_analysis():
         if in_baseline:
             # Feature is currently selected → show what happens WITHOUT it
             without     = [c for c in selected_cols if c != col]
-            r2_alt, mae_alt = quick_score(without) if without else (None, None)
+            r2_alt, mae_alt, mape_alt = quick_score(without) if without else (None, None, None)
             # delta_r2 positive = feature contributes positively (removing hurts)
             delta_r2  = round((base_r2 - (r2_alt or 0)) * 100, 2) if base_r2 is not None and r2_alt is not None else None
             delta_mae = round((mae_alt or 0) - base_mae, 0)         if base_mae is not None and mae_alt is not None else None
@@ -1528,7 +1623,7 @@ def feature_analysis():
         else:
             # Feature is NOT selected → show what happens by ADDING it
             with_col    = selected_cols + [col]
-            r2_alt, mae_alt = quick_score(with_col)
+            r2_alt, mae_alt, mape_alt = quick_score(with_col)
             # delta_r2 positive = adding this feature improves the model
             delta_r2  = round(((r2_alt or 0) - base_r2) * 100, 2) if base_r2 is not None and r2_alt is not None else None
             delta_mae = round(base_mae - (mae_alt or 0), 0)         if base_mae is not None and mae_alt is not None else None
@@ -1550,17 +1645,21 @@ def feature_analysis():
         else:
             rec, rec_color = 'unknown', 'text3'
 
+        delta_mape = round((mape_alt or 0) - (base_mape or 0), 2) if in_baseline else round((base_mape or 0) - (mape_alt or 0), 2)
         results.append({
             'feature':     col,
             'in_baseline': in_baseline,
             'corr':        corr,
             'base_r2':     round(base_r2  * 100, 1) if base_r2  is not None else None,
             'base_mae':    round(base_mae, 0)         if base_mae is not None else None,
+            'base_mape':   round(base_mape, 2)         if base_mape is not None else None,
             'r2_alt':      r2_alt_pct,
             'mae_alt':     round(mae_alt, 0)           if mae_alt  is not None else None,
+            'mape_alt':    round(mape_alt, 2)          if mape_alt is not None else None,
             'alt_label':   alt_label,
             'delta_r2':    delta_r2,
             'delta_mae':   delta_mae,
+            'delta_mape':  delta_mape,
             'recommendation': rec,
             'rec_color':   rec_color,
         })
@@ -1571,6 +1670,7 @@ def feature_analysis():
         'success':    True,
         'base_r2':    round(base_r2 * 100, 1)  if base_r2  is not None else None,
         'base_mae':   round(base_mae, 0)         if base_mae is not None else None,
+        'base_mape':  round(base_mape, 2)         if base_mape is not None else None,
         'features':   results,
         'n_features': len(feature_cols),
     })
@@ -2458,9 +2558,10 @@ def tune_batch():
                     imps = {feat_list[j]: round(float(raw_imp[j]/s*100), 1) for j in range(len(feat_list))}
             except Exception:
                 imps = None
-            return feat_list, round(float(r2_score(y,preds))*100,1), round(float(mean_absolute_error(y,preds)),0), imps
+            mape_v = float(np.mean(np.abs((y-preds)/np.where(y==0,1,y)))*100)
+            return feat_list, round(float(r2_score(y,preds))*100,1), round(float(mean_absolute_error(y,preds)),0), imps, round(mape_v,1)
         except Exception:
-            return feat_list, None, None, None
+            return feat_list, None, None, None, None
 
     from joblib import Parallel as _P, delayed as _d
     import warnings as _w
@@ -2469,9 +2570,9 @@ def tune_batch():
         raw = _P(n_jobs=n_threads, prefer='threads')(_d(_quick_cv)(fl) for fl in combos)
 
     results = [{'features': fl, 'n_features': len(fl),
-                'model': mcfg['label'], 'r2': r2, 'mae': mae,
+                'model': mcfg['label'], 'r2': r2, 'mae': mae, 'mape': mape,
                 'importance': imps or {}}
-               for fl, r2, mae, imps in raw if r2 is not None]
+               for fl, r2, mae, imps, mape in raw if r2 is not None]
     ncpu = _os.cpu_count() or 1
     jobs_info = f'{n_threads} threads × {_jpm} cores each = {min(n_threads*_jpm,_ncpu)}/{_ncpu} cores used'
     # Cache results for reuse across restarts
@@ -2696,20 +2797,34 @@ def overvalued():
         if use_log: tp = np.expm1(tp)
         pred_cv = tp.std(axis=0) / (np.abs(tp.mean(axis=0))+1)
 
-    df_train = get_working_df()
-    dist_counts = df_train['district'].value_counts().to_dict() if df_train is not None and 'district' in df_train.columns else {}
+    df_all_ov = get_working_df()
+    _train_src_ov = model_data.get('train_source', '')
+    if _train_src_ov and df_all_ov is not None and '_source' in df_all_ov.columns:
+        df_train_ov = df_all_ov[df_all_ov['_source'] == _train_src_ov]
+    else:
+        df_train_ov = df_all_ov
+    dist_counts = df_train_ov['district'].value_counts().to_dict() if df_train_ov is not None and 'district' in df_train_ov.columns else {}
+    city_col_ov = uploaded_data.get('city_col', 'city')
+    city_counts_ov = df_train_ov[city_col_ov].value_counts().to_dict() if df_train_ov is not None and city_col_ov in df_train_ov.columns else {}
     disp = [c for c in ['street','district','city','real_mls','property_type','bedrooms','bathrooms','floor_area_sqft','summary_url','year_built'] if c in df_score.columns]
     rows = []
     for i in range(len(df_score)):
         if gap_pct[i] < min_over_pct: continue
         dist   = str(df_score['district'].iloc[i]) if 'district' in df_score.columns else ''
+        city_v = str(df_score[city_col_ov].iloc[i]) if city_col_ov in df_score.columns else ''
         n_dist = dist_counts.get(dist, 0)
-        conf   = 'high' if n_dist>=10 else 'medium' if n_dist>=4 else 'low'
+        n_city = city_counts_ov.get(city_v, 0)
         cv_i   = float(pred_cv[i])
-        stab   = 'stable' if cv_i<0.05 else 'moderate' if cv_i<0.12 else 'unstable'
-        row    = {'actual':round(float(y_actual[i]),0),'predicted':round(float(y_pred[i]),0),
-                  'gap':round(float(gap[i]),0),'gap_pct':round(float(gap_pct[i]),1),
-                  'confidence':conf,'n_district':n_dist,'stability':stab,'pred_cv':round(cv_i*100,1)}
+        stab   = 'stable' if cv_i < 0.05 else 'moderate' if cv_i < 0.12 else 'unstable'
+        data_ok = n_dist >= 5
+        if   stab == 'stable'   and data_ok:  conf = 'high'
+        elif stab == 'stable'   and not data_ok: conf = 'medium'
+        elif stab == 'moderate' and data_ok:  conf = 'medium'
+        else:                                  conf = 'low'
+        row = {'actual': round(float(y_actual[i]), 0), 'predicted': round(float(y_pred[i]), 0),
+               'gap': round(float(gap[i]), 0), 'gap_pct': round(float(gap_pct[i]), 1),
+               'confidence': conf, 'n_district': n_dist, 'n_city': n_city,
+               'stability': stab, 'pred_cv': round(cv_i * 100, 1)}
         for c in disp: row[c] = str(df_score[c].iloc[i]) if c in df_score.columns else ''
         rows.append(mask_row(row))
     rows = sorted(rows, key=lambda x: -x['gap_pct'])[:top_n]
@@ -2804,12 +2919,22 @@ def upload_meta():
 
 # Auto-load data folders on first request
 _autoloaded = False
+_autoload_mtime = 0  # track last modification time of data folders
 
 @app.before_request
 def autoload_once():
-    global _autoloaded
-    if not _autoloaded:
-        _autoloaded = True
+    global _autoloaded, _autoload_mtime
+    import glob as _g
+    base = _os.path.dirname(_os.path.abspath(__file__))
+    # Check if any file in data/ folders changed
+    all_files = (
+        _g.glob(_os.path.join(base,'data','ads','*.csv')) +
+        _g.glob(_os.path.join(base,'data','sold','*.csv'))
+    )
+    current_mtime = max((int(_os.path.getmtime(f)*1000) for f in all_files), default=0)
+    if not _autoloaded or current_mtime != _autoload_mtime:
+        _autoloaded   = True
+        _autoload_mtime = current_mtime
         try:
             _autoload_data_folders()
         except Exception as _e:

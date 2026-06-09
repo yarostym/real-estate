@@ -95,6 +95,9 @@
   .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); }
   .status-dot.active { background: var(--success); box-shadow: 0 0 6px var(--success); }
 
+  /* Privacy mode hidden elements */
+  .privacy-active .privacy-hide { display: none !important; }
+
   /* MAIN LAYOUT */
   main { display: flex; min-height: calc(100vh - 73px); }
 
@@ -111,6 +114,24 @@
     flex: 1;
     padding: 32px 40px;
     overflow-y: auto;
+  }
+
+  /* Two-column pages (Overvalued etc) */
+  .two-col {
+    display: flex;
+    width: 100%;
+    min-height: calc(100vh - 73px);
+  }
+  .two-col > .sidebar {
+    width: 280px;
+    flex-shrink: 0;
+  }
+  .two-col > .main-content {
+    flex: 1;
+    padding: 32px 40px;
+    overflow-y: auto;
+    overflow-x: auto;
+    min-width: 0;
   }
 
   /* UPLOAD ZONE */
@@ -545,8 +566,9 @@
     <div class="status-dot" id="status-dot"></div>
     <span id="status-text">No data loaded</span>
     <button id="demo-btn" onclick="toggleDemo()"
+            title="Anonymise addresses, city and district for sharing screenshots"
             style="margin-left:auto;padding:3px 10px;font-size:11px;background:transparent;border:1px solid var(--border2);border-radius:6px;color:var(--text3);cursor:pointer;white-space:nowrap">
-      Demo: OFF
+      🔒 Privacy: OFF
     </button>
   </div>
 </header>
@@ -744,7 +766,7 @@
       </div>
       <div class="checkbox-list" id="pred-feature-list"></div>
 
-      <div class="section-label">Algorithm</div>
+      <div class="section-label" id="algo-label">Algorithm</div>
       <select id="model-type">
         <option value="random_forest">Random Forest 🌲</option>
         <option value="gradient_boosting">Gradient Boosting 🚀</option>
@@ -821,7 +843,7 @@
         <div class="section-title">Model Results</div>
         <div class="section-count" id="model-type-badge">–</div>
       </div>
-      <div id="model-config-summary" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:16px;display:none">
+      <div id="model-config-summary" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:16px;display:none" class="privacy-hide">
         <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Trained on</div>
         <div id="model-filter-info" style="font-size:11px;color:var(--accent2);margin-bottom:6px"></div>
         <div id="model-features-info" style="display:flex;flex-wrap:wrap;gap:4px"></div>
@@ -839,6 +861,11 @@
               <div class="metric-label">MAE — 5-fold CV</div>
               <div style="font-size:10px;color:var(--text3);margin-top:2px">Average prediction error</div>
             </div>
+            <div>
+              <div class="metric-val" id="mape-cv-val" style="font-size:18px">–</div>
+              <div class="metric-label">MAPE — 5-fold CV</div>
+              <div id="mape-cv-label" style="font-size:10px;color:var(--text3);margin-top:2px"></div>
+            </div>
             <div style="border-left:1px solid var(--border);padding-left:24px">
               <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Single split (20% test)</div>
               <div style="font-size:13px;font-family:var(--mono)">R² <span id="r2-val" style="color:var(--text2)">–</span> &nbsp; MAE <span id="mae-val" style="color:var(--text2)">–</span></div>
@@ -854,7 +881,7 @@
         <div id="pred-common-combo-text" style="font-size:11px;color:var(--text2)"></div>
       </div>
 
-      <div class="panel">
+      <div class="panel privacy-hide">
         <div class="panel-title">Feature Importance <span>(impact on price)</span></div>
         <div id="importance-bars"></div>
       </div>
@@ -875,9 +902,8 @@
           <table class="corr-table">
             <thead><tr>
               <th>Feature</th>
-              <th>Corr with target</th>
-              <th>R² impact</th>
-              <th>MAE impact</th>
+              <th>R² impact (5-fold CV)</th>
+              <th>MAE impact (5-fold CV)</th>
               <th>Recommendation</th>
             </tr></thead>
             <tbody id="fa-tbody"></tbody>
@@ -1215,7 +1241,17 @@
         </select>
         <div class="section-label">Min overvalued %</div>
         <input type="number" id="ov-min-pct" value="5" min="0" max="100"
-               style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:12px">
+               style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:8px">
+        <div class="section-label">Min confidence</div>
+        <select id="ov-min-confidence" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px;margin-bottom:8px">
+          <option value="">All</option>
+          <option value="high">✅ High only</option>
+          <option value="medium">〜 Medium+</option>
+        </select>
+        <div class="section-label" id="ov-score-label" style="display:none">Score dataset</div>
+        <select id="ov-score-source" style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;margin-bottom:12px;display:none">
+          <option value="">All files</option>
+        </select>
         <button class="btn-primary" onclick="runOvervalued()" style="width:100%">Find Overvalued</button>
       </div>
     </div>
@@ -1328,6 +1364,28 @@
       <input type="number" id="tune-gap" value="5" min="1" max="30"
              style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:13px"
              title="e.g. 5 means: if best=82%, test all combos scoring ≥77%">
+
+      <div class="section-label" style="margin-top:10px">Algorithms to test</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Pass 1+2 always use RF. Pass 3 adds selected algorithms.</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label class="check-item" style="padding:7px 10px;background:var(--bg);border-radius:7px;border:1px solid var(--border2)">
+          <input type="checkbox" id="tune-algo-rf" checked disabled>
+          🌲 Random Forest <span style="font-size:10px;color:var(--text3)">(always, Pass 1+2)</span>
+        </label>
+        <label class="check-item" style="padding:7px 10px;background:var(--bg);border-radius:7px;border:1px solid var(--border2)">
+          <input type="checkbox" id="tune-algo-gb" checked>
+          🚀 Gradient Boosting <span style="font-size:10px;color:var(--text3)">(Pass 3)</span>
+        </label>
+        <label class="check-item" style="padding:7px 10px;background:var(--bg);border-radius:7px;border:1px solid var(--border2)">
+          <input type="checkbox" id="tune-algo-linear">
+          📈 Linear Regression <span style="font-size:10px;color:var(--text3)">(Pass 3)</span>
+        </label>
+        <label class="check-item" style="padding:7px 10px;background:var(--bg);border-radius:7px;border:1px solid var(--border2)">
+          <input type="checkbox" id="tune-algo-stacking">
+          🔗 Stacking <span style="font-size:10px;color:var(--text3)">(Pass 3, slow)</span>
+        </label>
+      </div>
+
       <label class="check-item" style="margin:8px 0;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border2)">
         <input type="checkbox" id="tune-log" checked> Log-transform target
       </label>
@@ -1431,7 +1489,7 @@
         <table class="corr-table">
           <thead><tr>
             <th>#</th><th>Features</th><th>Algorithm</th>
-            <th>R² Score</th><th>MAE</th><th>Top feature impact</th><th></th>
+            <th>R² Score</th><th>MAE</th><th>MAPE</th><th>Top feature impact</th><th></th>
           </tr></thead>
           <tbody id="tune-tbody"></tbody>
         </table>
@@ -1534,13 +1592,14 @@ function setupCorrelationUI(data) {
   data.numeric_columns.forEach(col => {
     focusSel.innerHTML += `<option value="${col}">${col}</option>`;
   });
-  const priceHints = ['price', 'list_price', 'cost', 'value', 'sale'];
-  let priceIdx = -1;
-  data.numeric_columns.forEach((col, i) => {
-    if (priceHints.some(h => col.toLowerCase().includes(h))) priceIdx = i;
-  });
-  // +1 because first option is "All pairs"
-  if (priceIdx >= 0) focusSel.selectedIndex = priceIdx + 1;
+  // Prefer sold_price, then price, then first price-like
+  const _corrPriceCols = data.numeric_columns;
+  let _corrTarget = 'sold_price';
+  if (!_corrPriceCols.includes(_corrTarget)) {
+    _corrTarget = _corrPriceCols.find(c=>c.toLowerCase()==='price')
+               || _corrPriceCols.find(c=>['price','cost','value'].some(h=>c.toLowerCase().includes(h)));
+  }
+  if (_corrTarget) focusSel.value = _corrTarget;
 
   const list = document.getElementById('corr-col-list');
   list.innerHTML = '';
@@ -1612,7 +1671,10 @@ function setupPredictionUI(data) {
   });
 
   // Re-apply correlation filter if already run; also wire target change
-  document.getElementById('target-col').onchange = applyCorrToFeatures;
+  document.getElementById('target-col').onchange = () => {
+    applyCorrToFeatures();
+    autoDeselectLeakyFeatures();
+  };
   if (corrData) applyCorrToFeatures();
   // Auto-restore saved feature preset (only null-rate defaults, not corr-based)
   const _savedPreset = localStorage.getItem(LS_FEATURES);
@@ -1982,7 +2044,7 @@ async function loadTypicalValues(featureCols, targetCol) {
 function applyTypicalHints() {
   // Add hint text below each predict form input
   document.querySelectorAll('#predict-inputs input, #predict-inputs select').forEach(inp => {
-    const col = inp.dataset?.col || inp.getAttribute('data-col');
+    const col = inp.dataset?.col || inp.getAttribute('data-col') || inp.id?.replace('pred-input-','');
     if (!col) return;
     const tv = _typicalValues[col];
     if (!tv) return;
@@ -2007,7 +2069,7 @@ function applyTypicalHints() {
     btn.style.display = 'inline-block';
     btn.onclick = () => {
       document.querySelectorAll('#predict-inputs input, #predict-inputs select').forEach(inp => {
-        const col = inp.dataset?.col || inp.getAttribute('data-col');
+        const col = inp.dataset?.col || inp.getAttribute('data-col') || inp.id?.replace('pred-input-','');
         if (col && typRow[col] != null) inp.value = typRow[col];
       });
       showToast('Filled with typical values', 'success');
@@ -2015,6 +2077,60 @@ function applyTypicalHints() {
   }
 }
 // =================== END TYPICAL VALUES ===================
+
+// ── Leaky feature auto-deselect ──────────────────────────────────────────────
+const _LEAKY_WHEN_SOLD = new Set(['price','list_price','asking_price','price_discount_pct']);
+// ppsf is only leaky when floor_area_sqft is also selected — checked dynamically
+function autoDeselectLeakyFeatures() {
+  const target = document.getElementById('target-col')?.value || '';
+  if (!target.includes('sold_price')) return;
+  const checkedFeats = new Set([...document.querySelectorAll('#pred-feature-list input:checked')].map(c=>c.value));
+  const hasSqft = checkedFeats.has('floor_area_sqft') || checkedFeats.has('sqft');
+  let removed = [];
+  document.querySelectorAll('#pred-feature-list input[type=checkbox]').forEach(cb => {
+    const isLeaky = _LEAKY_WHEN_SOLD.has(cb.value) || (cb.value==='ppsf' && hasSqft);
+    if (isLeaky && cb.checked) {
+      cb.checked = false;
+      cb.closest('label').style.opacity = '0.4';
+      removed.push(cb.value);
+    }
+  });
+  if (removed.length) showToast('⚠️ Auto-removed leaky: ' + removed.join(', '), 'error');
+}
+
+// ── MAPE helpers ─────────────────────────────────────────────────────────────
+function mapeColor(mape) {
+  if (mape == null) return 'var(--text3)';
+  if (mape < 5)  return 'var(--success)';
+  if (mape < 10) return '#4CAF50';
+  if (mape < 15) return 'var(--accent)';
+  if (mape < 25) return 'var(--accent3)';
+  return 'var(--danger)';
+}
+function mapeLabel(mape) {
+  if (mape == null) return '';
+  if (mape < 5)  return 'Excellent';
+  if (mape < 10) return 'Good';
+  if (mape < 15) return 'Fair';
+  if (mape < 25) return 'Weak';
+  return 'Poor';
+}
+function mapeHtml(mape) {
+  if (mape == null) return '—';
+  const c = mapeColor(mape);
+  return '<span style="color:'+c+';font-family:var(--mono);font-weight:700">'+parseFloat(mape).toFixed(1)+'%</span>'
+    +' <span style="font-size:10px;color:'+c+'">'+mapeLabel(mape)+'</span>';
+}
+
+
+function _privacyTuneLabel(r2pct, mape) {
+  if (r2pct == null) return {label:'—', color:'var(--text3)'};
+  if      (r2pct >= 88 && (mape==null||mape<8))  return {label:'Excellent', color:'var(--success)'};
+  else if (r2pct >= 80 && (mape==null||mape<12)) return {label:'Good',      color:'#4CAF50'};
+  else if (r2pct >= 70 && (mape==null||mape<18)) return {label:'Fair',      color:'var(--accent3)'};
+  else if (r2pct >= 55)                          return {label:'Weak',      color:'var(--accent3)'};
+  else                                           return {label:'Poor',      color:'var(--danger)'};
+}
 
 function trainModel() {
   const target = document.getElementById('target-col').value;
@@ -2055,8 +2171,14 @@ function trainModel() {
     }
     modelData = data;
     showPredResults(data);
-    savePredValues();  // save current inputs before form rebuilds
-    showToast(`Model trained! R² = ${(data.r2_score*100).toFixed(1)}%`, 'success');
+    savePredValues();
+    // Warn if leaky features were auto-removed
+    const leaked = data.leaked_features_removed || [];
+    if (leaked.length) {
+      showToast(`⚠️ Removed leaky features: ${leaked.join(', ')} — they encode listing price which inflates R² when predicting sold_price`, 'error');
+    } else {
+      showToast(`Model trained! R² = ${(data.r2_score*100).toFixed(1)}%`, 'success');
+    }
     const ptEnc = data.encoders?.property_type || data.encoders?.type;
     if (ptEnc?.classes) appData._property_types = ptEnc.classes;
     showUndervaluedControls();
@@ -2095,6 +2217,12 @@ function showPredResults(data) {
     document.getElementById('r2-cv-val').textContent = (r2cv * 100).toFixed(1) + '%';
     document.getElementById('r2-cv-val').style.color = r2cv > 0.7 ? 'var(--success)' : r2cv > 0.4 ? 'var(--accent3)' : 'var(--danger)';
     document.getElementById('mae-cv-val').textContent = data.mae_cv ? '$' + Math.round(data.mae_cv).toLocaleString('en-CA') : '–';
+    const mapeEl = document.getElementById('mape-cv-val');
+    const mapeLb = document.getElementById('mape-cv-label');
+    if (mapeEl && data.mape_cv != null) {
+      mapeEl.innerHTML = mapeHtml(data.mape_cv);
+      if (mapeLb) mapeLb.textContent = mapeLabel(data.mape_cv);
+    }
   } else {
     document.getElementById('r2-cv-val').textContent = '–';
     document.getElementById('mae-cv-val').textContent = '–';
@@ -2234,9 +2362,14 @@ function buildPredictForm(data) {
     let inputHtml;
 
     if ((ft === 'categorical' || ft === 'target_encoded') && enc && enc.classes && enc.classes.length) {
-      const opts = enc.classes.map(c =>
-        `<option value="${c}"${c === prev ? ' selected' : ''}>${c}</option>`
-      ).join('');
+      const opts = enc.classes.map(c => {
+        let lbl = c;
+        if (_privacyOn) {
+          if (col === 'city' || col === 'municipality') lbl = privacyAlias('city', c);
+          else if (col.includes('district') || col.includes('neighborhood')) lbl = privacyAlias('district', c);
+        }
+        return `<option value="${c}"${c === prev ? ' selected' : ''}>${lbl}</option>`;
+      }).join('');
       const extraAttr = col === 'city' ? ` onchange="filterPredictDistrict(this.value)"` : '';
       inputHtml = `<select id="pred-input-${col}"${extraAttr}>${opts}</select>`;
 
@@ -2304,8 +2437,13 @@ function runPrediction() {
   .then(data => {
     if (data.error) { showToast(data.error, 'error'); return; }
     const res = document.getElementById('prediction-result');
-    document.getElementById('pred-value').textContent = data.prediction.toLocaleString('en-CA');
-    document.getElementById('pred-unit').textContent = `Predicted ${data.target_col}  ·  MAE ±$${Math.round(modelData.mae || 0).toLocaleString('en-CA')}`;
+    const _predVal = _privacyOn
+      ? Math.round(data.prediction / 100) * 100  // round to nearest 100 in privacy mode
+      : data.prediction;
+    document.getElementById('pred-value').textContent = _predVal.toLocaleString('en-CA');
+    document.getElementById('pred-unit').textContent = _privacyOn
+      ? `Predicted ${data.target_col}`
+      : `Predicted ${data.target_col}  ·  MAE ±$${Math.round(modelData.mae || 0).toLocaleString('en-CA')}`;
     res.classList.add('show');
     // Also load similar listings
     loadSimilarListings(values);
@@ -2336,15 +2474,17 @@ function renderSimilarListings(data) {
   const target = data.target_col;
 
   tbody.innerHTML = data.similar.map(r => {
-    const addr  = r.street || '—';
+    const addr  = _privacyOn ? privacyAlias('address', r.street||'—') : (r.street || '—');
     const type  = (r.property_type || '').replace(' for sale','');
-    const loc   = [r.city, r.district].filter(Boolean).join(' / ') || '—';
+    const _sc   = _privacyOn ? privacyAlias('city', r.city||'') : (r.city||'');
+    const _sd   = _privacyOn ? privacyAlias('district', r.district||'') : (r.district||'');
+    const loc   = [_sc, _sd].filter(Boolean).join(' / ') || '—';
     const beds  = r.bedrooms  ? `${parseFloat(r.bedrooms).toFixed(0)}bd` : '';
     const baths = r.bathrooms ? `${parseFloat(r.bathrooms).toFixed(0)}ba` : '';
     const sqft  = r.floor_area_sqft ? `${Math.round(parseFloat(r.floor_area_sqft))}sqft` : '';
     const specs = [beds, baths, sqft].filter(Boolean).join(' / ');
     const price = r[target] ? fmt(r[target]) : '—';
-    const url   = r.summary_url || '';
+    const url   = _privacyOn ? '' : (r.summary_url || '');
     const addrCell = url
       ? `<a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none">${addr} 🔗</a>`
       : addr;
@@ -2410,32 +2550,44 @@ function setupImpactUI(data) {
   data.numeric_columns.forEach(col => {
     sel.innerHTML += `<option value="${col}">${col}</option>`;
   });
-  const priceHints = ['price', 'list_price', 'cost', 'value', 'sale'];
-  data.numeric_columns.forEach((col, i) => {
-    if (priceHints.some(h => col.toLowerCase().includes(h))) sel.selectedIndex = i;
-  });
+  // Prefer sold_price, then price, then first price-like column
+  if (data.numeric_columns.includes('sold_price')) sel.value = 'sold_price';
+  else {
+    const ph = ['price','list_price','cost','value'];
+    const found = data.numeric_columns.find(c=>c.toLowerCase()==='price')
+               || data.numeric_columns.find(c=>ph.some(h=>c.toLowerCase().includes(h)));
+    if (found) sel.value = found;
+  }
 
   // Column checkboxes — auto-uncheck if >20 unique values (too granular to be useful)
   const nUnique = data.cat_n_unique || {};
   const skipHints = ['url','link','mls','street','address','summary','virtual','agency'];
   const list = document.getElementById('impact-col-list');
   list.innerHTML = '';
+  const _savedImpact = localStorage.getItem('realtyiq_impact_cols');
+  const _savedImpactSet = _savedImpact ? new Set(JSON.parse(_savedImpact)) : null;
   data.categorical_columns
     .filter(col => !skipHints.some(h => col.toLowerCase().includes(h)))
     .forEach(col => {
       const n       = nUnique[col] || 0;
-      const checked = n <= 20;
+      const checked = _savedImpactSet ? _savedImpactSet.has(col) : (n <= 20);
       const badge   = n > 0
         ? `<span style="font-size:10px;margin-left:4px;color:${n>20?'var(--danger)':n>10?'var(--accent3)':'var(--text3)'}">${n} vals</span>`
         : '';
       list.innerHTML += `<label class="check-item" style="${!checked?'opacity:0.55':''}">
-        <input type="checkbox" value="${col}" ${checked?'checked':''}> ${col}${badge}
+        <input type="checkbox" value="${col}" ${checked?'checked':''} onchange="saveImpactCols()"> ${col}${badge}
       </label>`;
     });
 }
 
+function saveImpactCols() {
+  const checked = [...document.querySelectorAll('#impact-col-list input:checked')].map(c=>c.value);
+  localStorage.setItem('realtyiq_impact_cols', JSON.stringify(checked));
+}
+
 function impactCheckAll(state) {
   document.querySelectorAll('#impact-col-list input').forEach(cb => cb.checked = state);
+  saveImpactCols();
 }
 
 function runImpact() {
@@ -2502,9 +2654,16 @@ function renderImpact(data) {
     col.groups.forEach(g => {
       const barW = Math.round((g.mean / overallMax) * 100);
       const avgLineW = Math.round((data.overall_mean / overallMax) * 100);
+      // Apply privacy masking to group values
+      const colLower = (col.column||'').toLowerCase();
+      let displayVal = g.value;
+      if (_privacyOn) {
+        if (colLower==='city'||colLower==='municipality') displayVal = privacyAlias('city', g.value);
+        else if (colLower.includes('district')||colLower.includes('neighborhood')) displayVal = privacyAlias('district', g.value);
+      }
       html += `
             <tr>
-              <td style="font-weight:600;font-size:13px">${g.value}</td>
+              <td style="font-weight:600;font-size:13px">${displayVal}</td>
               <td style="font-family:var(--mono);font-size:13px;font-weight:600">${fmt(g.mean)}</td>
               <td>
                 <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${pctColor(g.pct_diff)}">
@@ -2548,11 +2707,12 @@ function runFeatureAnalysis() {
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
       target_column:     target,
-      feature_columns:   features,   // ALL features to analyse
-      selected_columns:  selected,   // currently checked = baseline
+      feature_columns:   features,
+      selected_columns:  selected,
       model_type:        modelType,
       remove_outliers:   document.getElementById('remove-outliers').checked,
-      use_log_target:    document.getElementById('use-log-target').checked
+      use_log_target:    document.getElementById('use-log-target').checked,
+      train_source:      document.getElementById('train-source-sel')?.value || '',
     })
   })
   .then(r => r.json())
@@ -2567,79 +2727,74 @@ function runFeatureAnalysis() {
 
 function renderFeatureAnalysis(data) {
   document.getElementById('feature-analysis-panel').style.display = 'block';
-  document.getElementById('fa-badge').textContent =
-    `baseline R² ${data.base_r2 ?? '—'}%  ·  MAE $${data.base_mae ? Math.round(data.base_mae).toLocaleString('en-CA') : '—'}`;
+  // base_r2 and r2_alt already come as percentages (e.g. 87.4) from backend
+  const baseR2  = data.base_r2  != null ? parseFloat(data.base_r2).toFixed(1)  : null;
+  const baseMAE = data.base_mae != null ? Math.round(data.base_mae) : null;
+  document.getElementById('fa-badge').innerHTML =
+    'Baseline (selected features) — 5-fold CV: '
+    + (baseR2  ? `<b>R² ${baseR2}%</b>` : 'R² —') + '  ·  '
+    + (baseMAE ? `<b>MAE $${baseMAE.toLocaleString('en-CA')}</b>` : 'MAE —')
+    + (data.base_mape != null ? `  ·  ${mapeHtml(data.base_mape)}` : '');
 
-  const fmt = v => v === null || v === undefined ? '—' : '$' + Math.round(v).toLocaleString('en-CA');
-  const recColors = {
-    'keep — critical':    'var(--success)',
-    'keep — helpful':     'var(--accent)',
-    'optional':           'var(--text2)',
-    'consider removing':  'var(--danger)',
-    'add — big gain':     'var(--success)',
-    'worth adding':       'var(--accent)',
-    'minor effect':       'var(--text2)',
-    'skip — hurts model': 'var(--danger)',
-    'unknown':            'var(--text3)'
-  };
-  const recIcons = {
-    'keep — critical':    '✅',
-    'keep — helpful':     '👍',
-    'optional':           '➖',
-    'consider removing':  '⚠️',
-    'add — big gain':     '🚀',
-    'worth adding':       '➕',
-    'minor effect':       '➖',
-    'skip — hurts model': '❌',
-    'unknown':            '?'
-  };
-
+  const fmt = v => v == null ? '—' : '$' + Math.round(v).toLocaleString('en-CA');
   const tbody = document.getElementById('fa-tbody');
   tbody.innerHTML = '';
+
   data.features.forEach(f => {
-    const statusColor = f.in_baseline ? 'var(--accent)'  : 'var(--text3)';
-    const statusLabel = f.in_baseline ? '✓ selected'     : '○ not selected';
+    const isIn = f.in_baseline;
 
-    const corrColor = f.corr === null ? 'var(--text3)'
-      : Math.abs(f.corr) >= 0.7 ? 'var(--success)'
-      : Math.abs(f.corr) >= 0.4 ? 'var(--accent)'
-      : Math.abs(f.corr) >= 0.2 ? 'var(--accent3)' : 'var(--text3)';
-    const corrStr = f.corr === null ? '—'
-      : `<span style="color:${corrColor};font-family:var(--mono);font-weight:600">${f.corr>0?'+':''}${f.corr.toFixed(2)}</span>`;
+    // r2_alt already in percent (e.g. 80.1), delta_r2 already in percent points (e.g. +7.3)
+    const dr2 = f.delta_r2;
+    const dr2Color = dr2 == null ? 'var(--text3)'
+      : dr2 >= 3 ? 'var(--success)' : dr2 >= 0.5 ? 'var(--accent)'
+      : dr2 >= -0.5 ? 'var(--text2)' : 'var(--danger)';
+    const dr2Label = isIn ? 'remove → R²' : 'add → R²';
+    const dr2New   = f.r2_alt != null ? parseFloat(f.r2_alt).toFixed(1) + '%' : '—';
+    const dr2Delta = dr2 != null
+      ? `<span style="color:${dr2Color};font-weight:700">${dr2>=0?'+':''}${parseFloat(dr2).toFixed(1)}% vs ${baseR2??'—'}%</span>`
+      : '—';
 
-    // delta_r2: positive = good (feature contributes / adding helps)
-    const dr2Color = f.delta_r2 === null ? 'var(--text3)'
-      : f.delta_r2 >= 5 ? 'var(--success)' : f.delta_r2 >= 1 ? 'var(--accent)'
-      : f.delta_r2 >= -1 ? 'var(--text2)' : 'var(--danger)';
-    const dr2Sign  = f.delta_r2 !== null ? (f.delta_r2 >= 0 ? '+' : '') : '';
-    const dr2Str   = f.delta_r2 === null ? '—'
-      : `<span style="color:${dr2Color};font-family:var(--mono);font-weight:700">${dr2Sign}${f.delta_r2}%</span>`;
-    const dr2Sub   = f.r2_alt !== null
-      ? `<div style="font-size:10px;color:var(--text3)">${f.alt_label}: ${f.r2_alt}%</div>` : '';
+    // MAE impact: delta_mae is (baseline_mae - alt_mae), positive = improvement on removal
+    const dm = f.delta_mae;
+    const dmColor = dm == null ? 'var(--text3)'
+      : dm > 5000 ? 'var(--success)' : dm > 0 ? 'var(--accent)'
+      : dm > -5000 ? 'var(--text2)' : 'var(--danger)';
+    const dmNew   = f.mae_alt != null ? fmt(f.mae_alt) : '—';
+    const dmDelta = dm != null
+      ? `<span style="color:${dmColor};font-weight:700">${dm>=0?'-':'+'}${fmt(Math.abs(dm))} vs ${baseMAE?fmt(baseMAE):'—'}</span>`
+      : '—';
 
-    // delta_mae: positive = good (removing costs / adding saves)
-    const dmColor  = f.delta_mae === null ? 'var(--text3)'
-      : f.delta_mae > 5000 ? 'var(--success)' : f.delta_mae > 0 ? 'var(--accent)'
-      : f.delta_mae > -5000 ? 'var(--text2)' : 'var(--danger)';
-    const dmSign   = f.delta_mae !== null ? (f.delta_mae >= 0 ? '-' : '+') : '';
-    const dmStr    = f.delta_mae === null ? '—'
-      : `<span style="color:${dmColor};font-family:var(--mono);font-weight:700">${dmSign}${fmt(Math.abs(f.delta_mae))}</span>`;
-    const dmSub    = f.mae_alt !== null
-      ? `<div style="font-size:10px;color:var(--text3)">${f.alt_label.replace('R²','MAE')}: ${fmt(f.mae_alt)}</div>` : '';
-
-    const recColor = recColors[f.recommendation] || 'var(--text3)';
-    const recIcon  = recIcons[f.recommendation]  || '?';
+    const recMap = {
+      'keep — critical':    ['var(--success)', '✅ critical'],
+      'keep — helpful':     ['var(--accent)',  '👍 helpful'],
+      'optional':           ['var(--text2)',   '➖ optional'],
+      'consider removing':  ['var(--danger)',  '⚠️ remove?'],
+      'add — big gain':     ['var(--success)', '🚀 add now'],
+      'worth adding':       ['var(--accent)',  '➕ worth adding'],
+      'minor effect':       ['var(--text2)',   '➖ minor'],
+      'skip — hurts model': ['var(--danger)',  '❌ skip'],
+    };
+    const [recColor, recLabel] = recMap[f.recommendation] || ['var(--text3)', f.recommendation];
 
     tbody.innerHTML += `
-      <tr style="${!f.in_baseline ? 'opacity:0.75' : ''}">
+      <tr style="${!isIn ? 'opacity:0.8' : ''}">
         <td>
           <div style="font-weight:600;font-size:12px">${f.feature}</div>
-          <div style="font-size:10px;color:${statusColor}">${statusLabel}</div>
+          <div style="font-size:10px;color:${isIn?'var(--accent)':'var(--text3)'}">
+            ${isIn ? '✓ in model' : '○ not in model'}</div>
         </td>
-        <td>${corrStr}</td>
-        <td>${dr2Str}${dr2Sub}</td>
-        <td>${dmStr}${dmSub}</td>
-        <td><span style="color:${recColor};font-size:11px;font-weight:600">${recIcon} ${f.recommendation}</span></td>
+        <td>
+          <div style="font-size:10px;color:var(--text3)">${dr2Label}</div>
+          <div style="font-family:var(--mono);font-size:14px;font-weight:700">${dr2New}</div>
+          <div style="font-size:11px;margin-top:1px">${dr2Delta}</div>
+        </td>
+        <td>
+          <div style="font-size:10px;color:var(--text3)">${isIn?'remove':'add'} → MAE</div>
+          <div style="font-family:var(--mono);font-size:14px;font-weight:700">${dmNew}</div>
+          <div style="font-size:11px;margin-top:1px">${dmDelta}</div>
+          ${f.mape_alt!=null?`<div style="font-size:11px;margin-top:3px">MAPE: ${mapeHtml(f.mape_alt)}</div>`:''}
+        </td>
+        <td><span style="color:${recColor};font-size:11px;font-weight:600">${recLabel}</span></td>
       </tr>`;
   });
 }
@@ -2668,10 +2823,13 @@ function setupSegmentUI(data) {
   const targetSel = document.getElementById('seg-target-col');
   targetSel.innerHTML = '';
   data.numeric_columns.forEach(c => { targetSel.innerHTML += `<option value="${c}">${c}</option>`; });
-  const priceHints = ['price','list_price','cost','value','sale'];
-  data.numeric_columns.forEach((c, i) => {
-    if (priceHints.some(h => c.toLowerCase().includes(h))) targetSel.selectedIndex = i;
-  });
+  if (data.numeric_columns.includes('sold_price')) targetSel.value = 'sold_price';
+  else {
+    const _ph = ['price','list_price','cost','value'];
+    const _found = data.numeric_columns.find(c=>c.toLowerCase()==='price')
+                || data.numeric_columns.find(c=>_ph.some(h=>c.toLowerCase().includes(h)));
+    if (_found) targetSel.value = _found;
+  }
 
   // Features: all usable except obvious IDs
   const list = document.getElementById('seg-feature-list');
@@ -2788,7 +2946,7 @@ function onSegmentChange() {
   if (!info) return;
 
   document.getElementById('seg-model-info').textContent =
-    `R² ${info.r2===null?'n/a':(info.r2*100).toFixed(1)+'%'}  ·  MAE $${Math.round(info.mae).toLocaleString('en-CA')}  ·  ${info.n_rows} rows`;
+    `${info.model_type||''}  ·  R² ${info.r2===null?'n/a':(info.r2*100).toFixed(1)+'%'}  ·  MAE $${Math.round(info.mae).toLocaleString('en-CA')}  ·  ${info.n_rows} rows`;
 
   // Build predict form
   const container = document.getElementById('seg-predict-inputs');
@@ -2906,11 +3064,9 @@ function setupCityFilter(data) {
 
   // Sync uv city checkbox list
   const uvList = document.getElementById('uv-city-list');
+  if (data.cities) _appCities = data.cities;
   if (uvList && data.cities) {
-    uvList.innerHTML = '';
-    data.cities.forEach(c => {
-      uvList.innerHTML += `<label class="check-item"><input type="checkbox" value="${c}" checked> ${c}</label>`;
-    });
+    rebuildUvCityList(data.cities);
   }
 }
 
@@ -3060,6 +3216,17 @@ function updateUvWorkflowPanel(trainData) {
       const listFile = files.find(f=>f.type==='listings');
       if (listFile) sel.value = listFile.name;
     }
+    // Also populate ov-score-source
+    const ovSrc   = document.getElementById('ov-score-source');
+    const ovLabel = document.getElementById('ov-score-label');
+    if (ovSrc && files.length > 1) {
+      ovSrc.style.display = 'block';
+      if (ovLabel) ovLabel.style.display = 'block';
+      ovSrc.innerHTML = '<option value="">All files</option>'
+        + files.map(f=>'<option value="'+f.name+'">'+(f.type==='sold'?'💰 ':'📋 ')+f.name+' ('+f.rows+'r)</option>').join('');
+      const listFile = files.find(f=>f.type==='listings');
+      if (listFile) ovSrc.value = listFile.name;
+    }
   }).catch(()=>{});
 }
 
@@ -3182,14 +3349,22 @@ function renderUvTable(listings) {
   listings.forEach(r => {
     const barW  = Math.min(100, r.gap_pct * 2);
     const color = r.gap_pct >= 20 ? 'var(--success)' : r.gap_pct >= 10 ? 'var(--accent)' : 'var(--accent3)';
-    const addr  = r.street || '—';
+    const addr  = _privacyOn ? privacyAlias('address', r.street||'—') : (r.street || '—');
     const type  = (r.property_type || r.type || '').replace(' for sale','');
-    const loc      = [r.city, r.district].filter(Boolean).join(' / ') || '—';
-    const url      = r.summary_url || r.virtual_tour || '';
+    const _city = _privacyOn ? privacyAlias('city', r.city) : r.city;
+    const _dist = _privacyOn ? privacyAlias('district', r.district) : r.district;
+    const loc   = [_city, _dist].filter(Boolean).join(' / ') || '—';
+    const url   = _privacyOn ? '' : (r.summary_url || r.virtual_tour || '');
     const addrCell = url ? `<a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none;font-size:12px">${addr} 🔗</a>` : `<span style="font-size:12px">${addr}</span>`;
     const confColor = {'high':'var(--success)','medium':'var(--accent3)','low':'var(--danger)'}[r.confidence] || 'var(--text3)';
-    const confLabel = {'high':'High','medium':'Medium','low':'Low'}[r.confidence] || '?';
-    const nComp = r.n_district || r.n_city || 0;
+    const confIcon  = {'high':'✅','medium':'〜','low':'⚠️'}[r.confidence] || '?';
+    const confDesc  = r.confidence==='high'
+      ? (r.stability==='stable' ? 'Stable prediction, good data' : 'Good data coverage')
+      : r.confidence==='medium'
+      ? (r.stability==='stable' ? 'Stable but few sold comps' : 'Some uncertainty')
+      : (r.stability==='unstable' ? 'Model uncertain — treat with caution' : 'Few sold comps in this area');
+    const nComp     = r.n_district || 0;
+    const nCompStr  = nComp > 0 ? nComp + ' sold in district' : (r.n_city ? r.n_city + ' in city' : '0 comps');
     const stabColor = {'stable':'var(--success)','moderate':'var(--accent3)','unstable':'var(--danger)'}[r.stability] || 'var(--text3)';
     const stabIcon  = {'stable':'🎯','moderate':'〜','unstable':'⚠️'}[r.stability] || '';
     const stabTip   = r.stability==='stable' ? 'Model agrees on this price (low tree variance)' :
@@ -3212,12 +3387,16 @@ function renderUvTable(listings) {
             <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${color};min-width:42px">+${r.gap_pct}%</span>
           </div>
         </td>
-        <td>
-          <span style="font-size:11px;font-weight:600;color:${confColor}">${confLabel}</span>
-          <div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:3px">${nComp} comps</div>
-          <span style="font-size:10px;color:${stabColor}" title="${stabTip}">${stabIcon} ${r.stability||'?'} ${r.pred_cv!=null?'±'+r.pred_cv+'%':''}</span><br>
+        <td style="min-width:130px">
+          <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">
+            <span style="font-size:13px">${confIcon}</span>
+            <span style="font-size:12px;font-weight:700;color:${confColor}">${r.confidence?r.confidence.charAt(0).toUpperCase()+r.confidence.slice(1):'?'}</span>
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${confDesc}</div>
+          <div style="font-size:10px;color:var(--text3);font-family:var(--mono)">${nCompStr}</div>
+          <div style="font-size:10px;color:${stabColor};margin-top:2px">${r.pred_cv!=null?'±'+r.pred_cv+'%':''}</div>
           <button onclick="toggleComps(this,${listings.indexOf(r)})"
-                  style="padding:2px 8px;background:transparent;border:1px solid var(--border2);border-radius:5px;color:var(--text3);cursor:pointer;font-size:10px;font-family:var(--sans)">
+                  style="margin-top:4px;padding:2px 8px;background:transparent;border:1px solid var(--border2);border-radius:5px;color:var(--text3);cursor:pointer;font-size:10px">
             view comps
           </button>
         </td>
@@ -3275,8 +3454,9 @@ function renderComps(panel, data) {
   const fmt = v => '$' + Math.round(v).toLocaleString('en-CA');
   const target = data.target_col;
   if (!data.comps || !data.comps.length) {
+    const _showDist = _privacyOn ? (data.district ? privacyAlias('district', data.district) : '') : (data.district || '');
     panel.innerHTML = '<div style="font-size:11px;color:var(--text3)">No comparable sold listings found for this district in the training dataset.'
-      + (data.district ? ' Try adding more sold data for <b>'+data.district+'</b>.' : '') + '</div>';
+      + (_showDist ? ' Try adding more sold data for <b>'+_showDist+'</b>.' : '') + '</div>';
     return;
   }
   const prices = data.comps.map(c => c[target]).filter(Boolean).sort((a,b) => a-b);
@@ -3284,8 +3464,8 @@ function renderComps(panel, data) {
   const minP   = prices.length ? fmt(prices[0]) : '?';
   const maxP   = prices.length ? fmt(prices[prices.length-1]) : '?';
   const rows = data.comps.map(r => {
-    const url  = r.summary_url || '';
-    const addr = r.street || '?';
+    const url  = _privacyOn ? '' : (r.summary_url || '');
+    const addr = _privacyOn ? privacyAlias('address', r.street||'?') : (r.street || '?');
     const cell = url ? '<a href="'+url+'" target="_blank" style="color:var(--accent);text-decoration:none">'+addr+' 🔗</a>' : addr;
     const type = (r.property_type||'').replace(' for sale','');
     const beds  = r.bedrooms   ? parseFloat(r.bedrooms).toFixed(0)+'bd'  : '';
@@ -3294,9 +3474,17 @@ function renderComps(panel, data) {
     const yr    = r.year_built && r.year_built !== 'nan' ? r.year_built : '';
     const specs = [beds,baths,sqft,yr].filter(Boolean).join(' / ');
     const price = r[target] ? fmt(r[target]) : '—';
-    return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 10px;font-size:12px;max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+cell+'</td><td style="padding:5px 10px;font-size:11px;color:var(--text2)">'+type+'</td><td style="padding:5px 10px;font-family:var(--mono);font-size:11px;color:var(--text2)">'+specs+'</td><td style="padding:5px 10px;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent)">'+price+'</td></tr>';
+    // Mask city/district in the row's location display
+    const rowDist = _privacyOn ? privacyAlias('district', r.district||'') : (r.district||'');
+    const rowCity = _privacyOn ? privacyAlias('city', r.city||'') : (r.city||'');
+    const locStr  = [rowCity, rowDist].filter(Boolean).join(' / ');
+    const locCell = locStr ? '<div style="font-size:10px;color:var(--text3)">'+locStr+'</div>' : '';
+    return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 10px;font-size:12px;max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+cell+locCell+'</td><td style="padding:5px 10px;font-size:11px;color:var(--text2)">'+type+'</td><td style="padding:5px 10px;font-family:var(--mono);font-size:11px;color:var(--text2)">'+specs+'</td><td style="padding:5px 10px;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent)">'+price+'</td></tr>';
   }).join('');
-  panel.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:12px;font-weight:600;color:var(--text2)">'+data.n+' comps in <span style="color:var(--accent)">'+( data.district||data.city)+'</span></span><span style="font-size:11px;font-family:var(--mono);color:var(--text3)">range: '+minP+' — '+maxP+'&nbsp;&nbsp;median: <span style="color:var(--text)">'+median+'</span></span></div><table style="width:100%;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--border2)"><th style="padding:3px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Address</th><th style="padding:3px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Type</th><th style="padding:3px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Specs</th><th style="padding:3px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Price</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  const _compsLoc = _privacyOn
+    ? (data.district ? privacyAlias('district',data.district) : (data.city ? privacyAlias('city',data.city) : '?'))
+    : (data.district || data.city || '?');
+  panel.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:12px;font-weight:600;color:var(--text2)">'+data.n+' comps in <span style="color:var(--accent)">'+_compsLoc+'</span></span><span style="font-size:11px;font-family:var(--mono);color:var(--text3)">range: '+minP+' — '+maxP+'&nbsp;&nbsp;median: <span style="color:var(--text)">'+median+'</span></span></div><table style="width:100%;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--border2)"><th style="padding:3px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Address</th><th style="padding:3px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Type</th><th style="padding:3px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Specs</th><th style="padding:3px 10px;font-size:10px;color:var(--text3);text-align:left;font-family:var(--mono);text-transform:uppercase">Price</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
 
@@ -3416,6 +3604,10 @@ async function runOvervalued() {
   const btn = document.querySelector('#page-overvalued .btn-primary');
   if (btn) { btn.disabled=true; btn.textContent='Loading...'; }
   try {
+    const minConf = document.getElementById('ov-min-confidence')?.value || '';
+    // score_source: check ov-specific first, fall back to uv shared one
+    const scoreSrc = document.getElementById('ov-score-source')?.value
+                  || document.getElementById('uv-score-source')?.value || '';
     const r = await fetch('/api/overvalued', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
@@ -3423,12 +3615,16 @@ async function runOvervalued() {
         min_over_pct: parseFloat(document.getElementById('ov-min-pct')?.value)||5,
         city: document.getElementById('ov-city')?.value||'',
         property_type: document.getElementById('ov-type')?.value||'',
-        score_source: document.getElementById('uv-score-source')?.value||'',
+        score_source: scoreSrc,
+        min_confidence: minConf,
       })
     });
     const d = await r.json();
     if (d.error) { showToast(d.error,'error'); return; }
-    const listings = d.listings||[];
+    let listings = d.listings||[];
+    // Client-side confidence filter
+    if (minConf === 'high') listings = listings.filter(r => r.confidence === 'high');
+    else if (minConf === 'medium') listings = listings.filter(r => r.confidence !== 'low');
     document.getElementById('ov-count').textContent = listings.length;
     document.getElementById('ov-empty').style.display = listings.length?'none':'block';
     document.getElementById('ov-results').style.display = listings.length?'block':'none';
@@ -3436,15 +3632,17 @@ async function runOvervalued() {
     const tbody = document.getElementById('ov-tbody');
     tbody.innerHTML = '';
     listings.forEach(r => {
-      const addr   = r.street||'—';
+      const addr   = _privacyOn ? privacyAlias('address', r.street||'—') : (r.street||'—');
       const type   = r.property_type||'—';
-      const loc    = [r.city,r.district].filter(Boolean).join(' / ')||'—';
-      const url    = r.summary_url||'';
+      const _ocity = _privacyOn ? privacyAlias('city', r.city) : r.city;
+      const _odist = _privacyOn ? privacyAlias('district', r.district) : r.district;
+      const loc    = [_ocity, _odist].filter(Boolean).join(' / ')||'—';
+      const url    = _privacyOn ? '' : (r.summary_url||'');
       const addrCell = url?`<a href="${url}" target="_blank" style="color:var(--danger);text-decoration:none;font-size:12px">${addr} 🔗</a>`:`<span style="font-size:12px">${addr}</span>`;
       const pct    = Math.min(100, r.gap_pct);
-      const stabColor = {'stable':'var(--success)','moderate':'var(--accent3)','unstable':'var(--danger)'}[r.stability]||'var(--text3)';
       const confColor = {'high':'var(--success)','medium':'var(--accent3)','low':'var(--danger)'}[r.confidence]||'var(--text3)';
-      const stabLabel = r.stability==='stable'?'🎯 stable':r.stability==='moderate'?'〜 moderate':'⚠️ unstable';
+      const confIcon  = {'high':'✅','medium':'〜','low':'⚠️'}[r.confidence]||'?';
+      const nCompStr  = r.n_district>0 ? r.n_district+' sold' : '—';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${addrCell}</td>
@@ -3462,9 +3660,10 @@ async function runOvervalued() {
             <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--danger)">+${r.gap_pct}%</span>
           </div>
         </td>
-        <td>
-          <span style="font-size:11px;font-weight:600;color:${confColor}">${r.confidence||'?'}</span>
-          <div style="font-size:9px;color:${stabColor}">${stabLabel}</div>
+        <td style="min-width:100px">
+          <div style="font-size:12px;font-weight:700;color:${confColor}">${confIcon} ${r.confidence?r.confidence.charAt(0).toUpperCase()+r.confidence.slice(1):'?'}</div>
+          <div style="font-size:10px;color:var(--text3)">${nCompStr}</div>
+          <div style="font-size:10px;color:${confColor}">${r.pred_cv!=null?'±'+r.pred_cv+'%':''}</div>
         </td>`;
       tbody.appendChild(tr);
     });
@@ -3477,26 +3676,114 @@ function setupOvervaluedFilters(data) {
   const typeEl = document.getElementById('ov-type');
   if (!cityEl || !typeEl) return;
   const cities = data.city_to_districts ? Object.keys(data.city_to_districts) : [];
-  cityEl.innerHTML = '<option value="">All cities</option>' + cities.map(c=>`<option value="${c}">${c}</option>`).join('');
+  cityEl.innerHTML = '<option value="">All cities</option>' + cities.map(c=>`<option value="${c}">${_privacyOn ? privacyAlias('city',c) : c}</option>`).join('');
   const types = (data.preview||[]).map(r=>r.property_type).filter(Boolean);
   const uniq  = [...new Set(types)];
   typeEl.innerHTML = '<option value="">All types</option>' + uniq.map(t=>`<option value="${t}">${t}</option>`).join('');
 }
 // =================== END OVERVALUED ===================
 
-// =================== DEMO MODE ===================
+
+// =================== PRIVACY UI HELPERS ===================
+let _privacyOn = false;
+const _privacyMap = { city:{}, district:{} };
+
+function privacyAlias(type, val) {
+  if (!_privacyOn || !val) return val;
+  const map = _privacyMap[type] || (_privacyMap[type] = {});
+  if (!map[val]) map[val] = type==='city' ? 'City '+(Object.keys(map).length+1) : 'District '+(Object.keys(map).length+1);
+  return map[val];
+}
+
+// Rebuild privacy-aware city checkboxes in Undervalued
+function rebuildUvCityList(cities) {
+  const uvList = document.getElementById('uv-city-list');
+  if (!uvList) return;
+  uvList.innerHTML = '';
+  (cities||[]).forEach(c => {
+    const lbl = document.createElement('label');
+    lbl.className = 'check-item';
+    const cb  = document.createElement('input');
+    cb.type = 'checkbox'; cb.value = c; cb.checked = true;
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(' ' + privacyAlias('city', c)));
+    uvList.appendChild(lbl);
+  });
+}
+
+// Rebuild privacy-aware global filter checkboxes (city/district columns)
+// Algorithm alias map
+const _algoMap = {};
+function algoAlias(name) {
+  if (!_privacyOn || !name) return name;
+  if (!_algoMap[name]) _algoMap[name] = 'Algorithm ' + (Object.keys(_algoMap).length + 1);
+  return _algoMap[name];
+}
+
+function _applyTextAlias(containerEl, type) {
+  if (!containerEl) return;
+  containerEl.querySelectorAll('label').forEach(lbl => {
+    const cb = lbl.querySelector('input');
+    if (!cb) return;
+    const real = cb.dataset.realVal || cb.value;
+    if (!cb.dataset.realVal) cb.dataset.realVal = real;
+    [...lbl.childNodes].filter(n=>n.nodeType===3)
+      .forEach(tn => { tn.textContent = ' ' + (_privacyOn ? privacyAlias(type, real) : real); });
+  });
+}
+
+function refreshPrivacyFilters() {
+  // Toggle body class — CSS .privacy-active .privacy-hide { display:none }
+  document.body.classList.toggle('privacy-active', _privacyOn);
+
+  _applyTextAlias(document.getElementById('gf-city'), 'city');
+  _applyTextAlias(document.getElementById('gf-district'), 'district');
+
+  // Overvalued city select
+  const ovCity = document.getElementById('ov-city');
+  if (ovCity) {
+    [...ovCity.options].forEach(opt => {
+      if (!opt.value) return;
+      if (!opt.dataset.realVal) opt.dataset.realVal = opt.value;
+      opt.text = _privacyOn ? privacyAlias('city', opt.dataset.realVal) : opt.dataset.realVal;
+    });
+  }
+  // Undervalued city list
+  if (_appCities) rebuildUvCityList(_appCities);
+
+
+}
+
+let _appCities = [];
+// =================== END PRIVACY UI HELPERS ===================
+
+// =================== PRIVACY MODE ===================
 async function toggleDemo() {
   const r = await fetch('/api/toggle_demo', {method:'POST'});
   const d = await r.json();
   const btn = document.getElementById('demo-btn');
+  const on  = d.privacy_mode ?? d.demo_mode ?? false;
   if (btn) {
-    btn.textContent = 'Demo: ' + (d.demo_mode ? 'ON' : 'OFF');
-    btn.style.color = d.demo_mode ? 'var(--accent3)' : 'var(--text3)';
-    btn.style.borderColor = d.demo_mode ? 'var(--accent3)' : 'var(--border2)';
+    btn.textContent    = '🔒 Privacy: ' + (on ? 'ON' : 'OFF');
+    btn.style.color    = on ? 'var(--accent3)' : 'var(--text3)';
+    btn.style.borderColor = on ? 'var(--accent3)' : 'var(--border2)';
+    btn.style.background  = on ? 'rgba(255,180,0,0.08)' : 'transparent';
   }
-  showToast('Demo mode ' + (d.demo_mode ? 'ON — addresses hidden' : 'OFF'), 'success');
+  if (on) {
+    // Reset alias maps so they're fresh
+    Object.keys(_privacyMap).forEach(k => { _privacyMap[k] = {}; });
+  }
+  _privacyOn = on;
+  refreshPrivacyFilters();
+
+  localStorage.setItem('realtyiq_privacy', on ? '1' : '0');
+  showToast(
+    on ? '🔒 Privacy ON — addresses, city & district anonymised'
+       : '🔓 Privacy OFF — real data shown',
+    'success'
+  );
 }
-// =================== END DEMO MODE ===================
+// =================== END PRIVACY MODE ===================
 
 // =================== MULTI-FILE UPLOAD ===================
 async function uploadExtraFile() {
@@ -3870,7 +4157,7 @@ function setupTuningUI(data) {
       pinBtn.type = 'button';
       pinBtn.title = 'Pin as required (always included)';
       pinBtn.style.cssText = 'padding:0 4px;height:16px;background:transparent;border:1px solid var(--border2);border-radius:3px;cursor:pointer;font-size:9px;color:var(--text3);flex-shrink:0;line-height:1';
-      pinBtn.textContent = '📌';
+      pinBtn.textContent = '·';
       pinBtn.addEventListener('click', e => toggleRequired(pinBtn, e));
       lbl.appendChild(pinBtn);
       list.appendChild(lbl);
@@ -3915,12 +4202,17 @@ function tuneCheckAll(state) {
 
 function markRequiredLabel(cb) {
   const lbl = cb.closest('label');
-  const btn = lbl?.querySelector('button');
   if (!lbl) return;
+  const btn  = lbl.querySelector('button');
   const isReq = cb.dataset.required === '1';
-  lbl.style.background = isReq ? 'var(--accent3)22' : '';
-  lbl.style.borderColor = isReq ? 'var(--accent3)' : '';
-  if (btn) { btn.textContent = isReq ? '📌' : 'pin'; btn.style.color = isReq ? 'var(--accent3)' : 'var(--text3)'; }
+  lbl.style.background   = isReq ? 'rgba(255,180,0,0.12)' : '';
+  lbl.style.borderRadius = isReq ? '5px' : '';
+  lbl.style.outline      = isReq ? '1px solid var(--accent3)' : '';
+  if (btn) {
+    btn.textContent = isReq ? '📌' : '·';
+    btn.style.color = isReq ? 'var(--accent3)' : 'var(--text3)';
+    btn.title = isReq ? 'Pinned — always included. Click to unpin.' : 'Pin as required (always included)';
+  }
   if (isReq) { cb.checked = true; cb.disabled = true; }
   else        { cb.disabled = false; }
 }
@@ -3977,13 +4269,27 @@ function runTuning() {
     generateCombos(nonReq, freeSlots).forEach(c => allCombos.push([...reqArr, ...c]));
   }
 
-  // Apply worker split
-  const workerCombos = wp.n_workers > 1
+  // Filter out leaky combinations when target = sold_price
+  const _directLeaky = new Set(['price','list_price','asking_price','price_discount_pct']);
+  const _hasSqftCols = new Set(['floor_area_sqft','sqft','floor_area']);
+  function isLeakyCombo(combo) {
+    if (!target.includes('sold_price')) return false;
+    const cSet = new Set(combo);
+    if ([...cSet].some(c => _directLeaky.has(c))) return true;  // direct price leak
+    if (cSet.has('ppsf') && [...cSet].some(c => _hasSqftCols.has(c))) return true; // ppsf × sqft = price
+    return false;
+  }
+
+  // Apply worker split and leaky filter
+  const workerCombos = (wp.n_workers > 1
     ? allCombos.filter((_, i) => i % wp.n_workers === wp.worker_id)
-    : allCombos;
+    : allCombos).filter(c => !isLeakyCombo(c));
+
+  const filteredOut = allCombos.length - workerCombos.length;
 
   const totalTests = workerCombos.length;
   if (totalTests === 0) { showToast('No combinations to test', 'error'); return; }
+  if (filteredOut > 0) showToast(`Filtered ${filteredOut} leaky combos (ppsf+sqft or price)`, 'error');
 
   document.getElementById('tune-empty').style.display = 'none';
   document.getElementById('tune-results').style.display = 'none';
@@ -4031,21 +4337,33 @@ function runTuning() {
         pass2Total, done, target, useLog, rmOut, nThr, nJobs, Math.max(batchSz, top50.length), topN,
         (done2) => {
           if (_tuneStop) { finalizeTuning(topN); return; }
-          // Pass 3: top 30% with GB + Linear
+          // Pass 3: run selected algorithms on top 15%
+          const _useGB      = document.getElementById('tune-algo-gb')?.checked ?? true;
+          const _useLinear  = document.getElementById('tune-algo-linear')?.checked ?? false;
+          const _useStack   = document.getElementById('tune-algo-stacking')?.checked ?? false;
           const top30 = [..._tuneAllRes]
                           .filter(r => r.model === 'Random Forest')
                           .sort((a,b)=>b.r2-a.r2)
                           .slice(0, Math.max(1, Math.ceil(_tuneAllRes.length * 0.15)))
                           .map(r => r.features);
-          const pass3Total = done2 + top30.length * 2;
+          const _pass3Algos = [
+            ..._useGB     ? [['gb',      'GB on top 15%']]      : [],
+            ..._useLinear ? [['linear',  'Linear on top 15%']]  : [],
+            ..._useStack  ? [['stacking','Stacking on top 15%']]: [],
+          ];
+          if (_pass3Algos.length === 0 || top30.length === 0) { finalizeTuning(topN); return; }
+          const pass3Total = done2 + top30.length * _pass3Algos.length;
           document.getElementById('tune-progress-badge').textContent = done2 + ' / ' + pass3Total + ' tests';
-          runBatchPhase(top30, 'gb', 'Pass 3/3: GB on top 15%',
-            pass3Total, done2, target, useLog, rmOut, nThr, nJobs, Math.max(batchSz, top30.length), topN,
-            (done3) => {
-              runBatchPhase(top30, 'linear', 'Pass 3/3: Linear on top 15%',
-                done3 + top30.length, done3, target, useLog, rmOut, nThr, nJobs, top30.length, topN,
-                () => finalizeTuning(topN));
-            });
+          let _p3done = done2;
+          const _runNextAlgo = (idx) => {
+            if (idx >= _pass3Algos.length) { finalizeTuning(topN); return; }
+            const [algoId, algoLabel] = _pass3Algos[idx];
+            runBatchPhase(top30, algoId, 'Pass 3: ' + algoLabel,
+              _p3done + top30.length * (_pass3Algos.length - idx), _p3done,
+              target, useLog, rmOut, nThr, nJobs, Math.max(batchSz, top30.length), topN,
+              (doneN) => { _p3done = doneN; _runNextAlgo(idx + 1); });
+          };
+          _runNextAlgo(0);
         });
     });
 }
@@ -4432,9 +4750,10 @@ function renderTuneLive(results) {
     row.innerHTML =
       '<span style="font-size:12px;color:var(--text3);min-width:24px">#'+(i+1)+'</span>'
       +'<span style="font-size:16px;font-weight:700;color:'+r2Color(r.r2)+';font-family:var(--mono);min-width:52px">'+r.r2+'%</span>'
-      +'<span style="font-size:11px;white-space:nowrap">'+modelIcon(r.model)+' '+r.model+'</span>'
+      +'<span style="font-size:11px;white-space:nowrap">'+(_privacyOn?algoAlias(r.model):(modelIcon(r.model)+' '+r.model))+'</span>'
       +'<span style="flex:1;min-width:0">'+featureBadges+'</span>'
       +'<span style="font-size:11px;color:var(--text3);font-family:var(--mono);white-space:nowrap">'+fmt(r.mae)+'</span>'
+      +(r.mape!=null?' <span style="font-size:10px">'+mapeHtml(r.mape)+'</span>':'')
       +'<button data-live-idx="'+i+'" style="padding:3px 8px;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap">Use&amp;Train</button>';
     row.querySelector('button').addEventListener('click', () => {
       const res = _allTuneResults[i];
@@ -4521,6 +4840,7 @@ function renderTuneResults(results) {
       +'<td style="font-size:12px;white-space:nowrap">'+modelIcon(r.model)+' '+r.model+'</td>'
       +'<td><div style="display:flex;align-items:center;gap:6px"><div style="width:60px;height:5px;background:var(--border);border-radius:3px"><div style="height:100%;width:'+bw+'%;background:'+r2Color(r.r2)+';border-radius:3px"></div></div><span style="font-family:var(--mono);font-size:13px;font-weight:700;color:'+r2Color(r.r2)+'">'+r.r2+'%</span></div></td>'
       +'<td style="font-family:var(--mono);font-size:12px">'+fmt(r.mae)+'</td>'
+      +'<td style="font-size:11px;white-space:nowrap">'+(r.mape!=null?mapeHtml(r.mape):'—')+'</td>'
       +'<td style="font-size:11px;line-height:1.6">'+impCell+'</td>'
       +'<td style="white-space:nowrap">'
       +'<button data-tidx="'+i+'" data-train="0" style="padding:3px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;cursor:pointer;font-size:11px;margin-right:4px">Apply</button>'
@@ -4620,7 +4940,10 @@ function saveTunePreset() {
   const nWork   = document.getElementById('tune-n-workers')?.value || '1';
   const wId     = document.getElementById('tune-worker-id')?.value || '1';
   const reqd    = [...document.querySelectorAll('#tune-feature-list input[data-required="1"]')].map(c => c.value);
-  localStorage.setItem('realtyiq_tune_preset', JSON.stringify({ checked, target, minF, maxF, gapV, parC, nThr, nJobs, nWork, wId, required: reqd }));
+  const algos   = { gb: document.getElementById('tune-algo-gb')?.checked ?? true,
+                    linear: document.getElementById('tune-algo-linear')?.checked ?? false,
+                    stacking: document.getElementById('tune-algo-stacking')?.checked ?? false };
+  localStorage.setItem('realtyiq_tune_preset', JSON.stringify({ checked, target, minF, maxF, gapV, parC, nThr, nJobs, nWork, wId, required: reqd, algos }));
   showToast('Tuning preset saved', 'success');
 }
 function restoreTunePreset() {
@@ -4645,6 +4968,12 @@ function restoreTunePreset() {
       document.querySelectorAll('#tune-feature-list input').forEach(cb => {
         if (reqSet.has(cb.value)) { cb.dataset.required = '1'; cb.checked = true; markRequiredLabel(cb); }
       });
+    }
+    // Restore algorithm checkboxes
+    if (p.algos) {
+      if (document.getElementById('tune-algo-gb'))       document.getElementById('tune-algo-gb').checked       = p.algos.gb ?? true;
+      if (document.getElementById('tune-algo-linear'))   document.getElementById('tune-algo-linear').checked   = p.algos.linear ?? false;
+      if (document.getElementById('tune-algo-stacking')) document.getElementById('tune-algo-stacking').checked = p.algos.stacking ?? false;
     }
     showToast('Restored: ' + (p.checked?.length||0) + ' features', 'success');
   } catch(e) { showToast('Could not restore', 'error'); }
@@ -4872,6 +5201,14 @@ zone.addEventListener('drop', e => {
 
 // On page load: check if server has auto-loaded data (from data/ads + data/sold folders)
 window.addEventListener('load', async () => {
+  // Restore privacy mode
+  if (localStorage.getItem('realtyiq_privacy') === '1') {
+    _privacyOn = true;
+    const _pb = document.getElementById('demo-btn');
+    if (_pb) { _pb.textContent='🔒 Privacy: ON'; _pb.style.color='var(--accent3)'; _pb.style.borderColor='var(--accent3)'; _pb.style.background='rgba(255,180,0,0.08)'; }
+    document.body.classList.add('privacy-active');
+
+  }
   // Always call loadFileManager to show file panel if data exists
   loadFileManager();
   try {

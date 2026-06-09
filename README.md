@@ -1,61 +1,191 @@
-# RealtyIQ — Real Estate Analytics Platform
+# RealtyIQ — Real Estate Analytics
 
-A local web application for real estate price analysis, model training, and undervalued listing detection. Upload a CSV of property listings and get instant insights: correlation analysis, price prediction, category impact, segment models, and an automated model tuning engine.
-
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![Flask](https://img.shields.io/badge/Flask-3.x-lightgrey) ![scikit-learn](https://img.shields.io/badge/scikit--learn-1.x-orange)
+ML-powered real estate price analysis tool. Train models on sold data, find undervalued and overvalued listings, tune feature combinations, and predict prices.
 
 ---
 
-## Features
+## 🎬 Demo
 
-**Correlations** — Heatmap and ranked correlation pairs for any numeric column. Focus-column filter, threshold control, and one-click propagation of correlated features to the Prediction tab.
+[![RealtyIQ Demo](https://img.youtube.com/vi/uLpc7SxfMpY/maxresdefault.jpg)](https://www.youtube.com/watch?v=uLpc7SxfMpY)
 
-**Prediction** — Train Random Forest, Gradient Boosting, or Linear Regression on any feature subset. Shows R² (5-fold CV and single split), MAE, feature importance bars, and a summary of active filters and selected features. Save and reload trained models between sessions.
-
-**Category Impact** — Mean and median price breakdown per category value. Supports multi-value comma-separated fields (e.g. `parking_features`, `interior_features`).
-
-**Segment Models** — Train separate models per segment (one per city or property type) and compare accuracy side by side.
-
-**Undervalued Listings** — Score every listing against the trained model to surface properties priced below predicted value. Filter by city, confidence level, minimum undervaluation %, and property specs. Each listing shows comparable listings (`view comps`) from the same district.
-
-**Model Tuning** — Exhaustive grid search over all feature subset combinations using a 3-phase strategy:
-- Phase 1: fast RF screening (`n_estimators=30`) on all combinations
-- Phase 2: full RF (`n=200`) on top 40%
-- Phase 3: Gradient Boosting + Linear on top 20%
-
-Supports distributed search across multiple machines and configurable CPU thread count.
-
-**Saved Models** — Persist trained models to disk and reload without retraining.
+**[▶ Watch demo on YouTube](https://www.youtube.com/watch?v=uLpc7SxfMpY)**
 
 ---
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/yarostym/real-estate.git
-cd real-estate
-```
-
-### Windows (PowerShell)
-
-```powershell
-py -m venv venv
-Set-ExecutionPolicy -Scope Process Bypass
-.\venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+pip install flask pandas numpy scikit-learn
 python app.py
+# Open http://localhost:5000
 ```
 
-### macOS / Linux
+### Auto-load data on startup
 
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python app.py
+Drop CSV files into these folders — the app loads them automatically:
+
+```
+RealtyIQ/
+├── app.py
+├── templates/index.html
+├── data/
+│   ├── sold/          ← sold properties (weight ×3, for training)
+│   │   └── sold_2024.csv
+│   └── ads/           ← active listings (weight ×1, for scoring)
+│       └── listings_2024.csv
+└── saved_models/
 ```
 
-Open **http://127.0.0.1:5000** in your browser.
+---
+
+## Tabs
+
+### Correlations
+Explore relationships between numeric columns. Focus column defaults to `sold_price` or `price`. Use the global filter bar to narrow to a property type or city.
+
+### Prediction
+Train a model and predict prices.
+
+**Workflow:**
+1. Select target column — `sold_price` for sold data, `price` for listings
+2. Check feature columns in the sidebar
+3. Choose algorithm → **Train Model**
+4. Use **Train / Eval split** to train on sold and evaluate on listings
+5. Click **Analyse Feature Impact** to see per-feature ablation results
+
+**Metrics:**
+- **R² (5-fold CV)** — variance explained (same scale as Tuning)
+- **MAE** — average dollar error
+- **MAPE** — average % error · < 5% Excellent · < 10% Good · < 15% Fair
+
+**Leakage protection:** when target = `sold_price`, the app auto-removes features that reconstruct listing price (`ppsf` + `floor_area_sqft`, `price`, `price_discount_pct`).
+
+### Category Impact
+Median price by category value (district, property type, etc.). Target defaults to `sold_price` or `price`.
+
+### Segment Models
+Train one model per category value (e.g. per city). Compare accuracy across segments and predict using the right model.
+
+### Undervalued 🔍
+Find listings priced below the model's fair-value estimate.
+
+**Workflow:**
+1. Train model on sold data (Prediction tab)
+2. Switch to Undervalued, set score dataset to your ads file
+3. Click **Find Undervalued**
+
+Each result shows:
+- **Gap** — how much below fair value ($ and %)
+- **Confidence** — ✅ High / 〜 Medium / ⚠️ Low (RF tree agreement + data coverage)
+- **±%** — prediction spread across 200 trees
+- **view comps** — comparable sold listings
+
+### Overvalued 📈
+Same logic as Undervalued but for overpriced listings. Includes Min confidence filter.
+
+### Tuning ⚙️
+Automated grid search for the best feature combination and algorithm.
+
+**3-pass process:**
+1. **Pass 1** — RF n=30, all combinations (fast ranking)
+2. **Pass 2** — RF n=200, top combos within gap% of best (accurate)
+3. **Pass 3** — chosen algorithms (GB / Linear / Stacking) on top 15%
+
+**Algorithm selection:** choose which to test in Pass 3. RF always runs in Pass 1+2.
+
+**✨ Smart Select** — Boruta-style feature ranking using shadow features. Auto-selects real/maybe features above the statistical noise floor.
+
+**Feature frequency chart** — live bar chart showing how often each feature appears in top results.
+
+---
+
+## File Manager
+
+| Control | Effect |
+|---------|--------|
+| on / off | Include / exclude from all analysis |
+| ×1/×2/×3/×5 | Sample weight in training |
+| ✕ | Remove from session |
+
+Recommended: **💰 Sold** weight ×3 for training, **📋 Listings** weight ×1 for scoring.
+
+---
+
+## Privacy Mode 🔒
+
+Click **🔒 Privacy: OFF** in the header. State persists across browser sessions.
+
+| Field | Privacy mode |
+|-------|-------------|
+| Street address | Address #7 |
+| City | City 3 |
+| District | District 12 |
+| URLs, MLS, agent | HIDDEN |
+| Postal code, dates | HIDDEN |
+| Predicted price | Rounded to nearest $100 |
+| MAE in predict | Hidden |
+
+Aliases are stable within a session — same city always maps to the same alias.
+
+---
+
+## Auto-Derived Features
+
+| Feature | Source |
+|---------|--------|
+| `age` | `year_built` |
+| `lot_ratio` | lot / floor area |
+| `room_density` | rooms / floor area |
+| `bath_ratio` | bathrooms / rooms |
+| `ppsf` | price / sqft |
+| `n_parking_spaces` | parsed from `parking_spaces` text |
+| `n_covered_parking` | parsed from `parking_spaces` text |
+| `has_garage`, `has_rv_parking` | parsed from `parking_spaces` |
+| `n_fireplaces`, `has_gas_fireplace` | parsed from `fireplace` |
+| `n_levels` | `levels` |
+| `log_dom` | log(days on market + 1) |
+| `dist_van_centre` | GPS distance from Vancouver (km) |
+| `has_strata` | `maintenance_fee` > 0 |
+| `price_discount_pct` | (sold − asking) / asking % |
+
+---
+
+## Algorithms
+
+| Algorithm | Best for |
+|-----------|---------|
+| 🌲 Random Forest | Default. Robust, fast, reliable feature importances |
+| 🚀 Gradient Boosting | Small datasets, often slightly better R² |
+| 📈 Linear Regression | Baseline; interpretable |
+| 🔗 Stacking | RF + GB → meta; often best but slowest |
+
+---
+
+## API Reference
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/upload` | POST | Upload primary CSV |
+| `/api/upload_extra` | POST | Add extra CSV (type, weight) |
+| `/api/upload_meta` | GET | Column metadata |
+| `/api/files` | GET | List loaded files |
+| `/api/files/toggle` | POST | Include/exclude file |
+| `/api/files/set_weight` | POST | Change file weight |
+| `/api/files/remove` | POST | Remove file |
+| `/api/train` | POST | Train model |
+| `/api/predict` | POST | Predict price |
+| `/api/tune_batch` | POST | Evaluate feature combo batch |
+| `/api/smart_feature_select` | POST | Boruta feature ranking |
+| `/api/feature_analysis` | POST | Per-feature ablation |
+| `/api/undervalued` | POST | Find underpriced listings |
+| `/api/overvalued` | POST | Find overpriced listings |
+| `/api/comps` | POST | Comparable sold listings |
+| `/api/similar_listings` | POST | Similar listings by feature distance |
+| `/api/correlation` | POST | Pairwise correlations |
+| `/api/category_impact` | POST | Price by category value |
+| `/api/segment_train` | POST | Per-segment model training |
+| `/api/toggle_demo` | POST | Toggle privacy mode |
+| `/api/models` | GET/POST | Save/load/delete models |
 
 ---
 
@@ -68,117 +198,4 @@ numpy
 scikit-learn
 ```
 
-A full `requirements.txt` is included in the repository.
-
----
-
-## Input Data Format
-
-Upload any CSV where each row is a property listing and one column holds the target price. The app auto-detects numeric vs categorical columns, null rates, and the city/district hierarchy for cascading form dropdowns.
-
-**Typical columns for BC real estate:**
-
-| Column | Type | Notes |
-|---|---|---|
-| `price` | numeric | Target variable |
-| `floor_area_sqft` | numeric | Key predictor |
-| `bedrooms`, `bathrooms`, `rooms` | numeric | |
-| `year_built` | numeric | |
-| `district`, `city` | categorical | High-cardinality; target-encoded |
-| `property_type` | categorical | e.g. `House for sale` |
-| `parking_features`, `interior_features` | multi-value | Comma-separated; one-hot encoded |
-| `summary_url` | text | Rendered as clickable link |
-
----
-
-## Global Filter
-
-The collapsible filter bar (top of every tab) restricts all analysis to a data subset — for example `property_type: House for sale`. The active filter persists in `localStorage` and is restored automatically on the next page load. All training, tuning, and undervalued scoring respect the active filter.
-
----
-
-## Model Tuning
-
-### Single Machine
-
-1. Go to the **Tuning** tab
-2. Select candidate features, set Min/Max feature count, and adjust CPU threads
-3. Click **Find Best Model**
-4. Results appear live; click **Use & Train** on any row to apply immediately
-
-### Distributed (Multiple Machines)
-
-Run the same CSV and filter on each machine, then set:
-
-- **Total machines**: e.g. `3`
-- **This machine #**: `1`, `2`, or `3` on each machine
-
-Each machine tests a non-overlapping subset (`worker_id::n_workers` stride). When all finish, paste the job IDs from other machines into the **Merge** panel to combine and rank results.
-
-### CPU Threads
-
-Set **CPU threads** to `-1` (all cores, default) or a specific number to limit usage.
-
----
-
-## Saved Models
-
-After training, click **💾** next to Train Model. Models are saved to `saved_models/` as `.pkl` files and survive app restarts. Load any model from the Saved Models panel to run predictions without retraining.
-
----
-
-## API Reference
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/upload` | Upload CSV; returns column metadata |
-| `POST` | `/api/set_global_filter` | Apply data filter |
-| `POST` | `/api/train` | Train model |
-| `POST` | `/api/predict` | Predict price for input values |
-| `POST` | `/api/correlation` | Correlation heatmap data |
-| `POST` | `/api/category_impact` | Price breakdown by category |
-| `POST` | `/api/undervalued` | Score listings vs model |
-| `POST` | `/api/comps` | Comparable listings for a property |
-| `POST` | `/api/similar_listings` | Find similar listings |
-| `POST` | `/api/tune` | Start async grid search |
-| `GET` | `/api/tune_status` | Poll tuning progress |
-| `POST` | `/api/tune_stop` | Stop a running tuning job |
-| `POST` | `/api/tune_merge` | Merge results from multiple workers |
-| `POST` | `/api/tune_estimate` | Estimate test count and runtime |
-| `GET` | `/api/models` | List saved models |
-| `POST` | `/api/models/save` | Save current model to disk |
-| `POST` | `/api/models/load` | Load a saved model into memory |
-| `POST` | `/api/models/delete` | Delete a saved model |
-| `POST` | `/api/models/rename` | Rename a saved model |
-| `GET` | `/api/version` | App version |
-
----
-
-## Project Structure
-
-```
-real-estate/
-├── app.py                 # Flask backend — all routes and ML logic
-├── templates/
-│   └── index.html         # Single-page frontend (vanilla JS, no build step)
-├── saved_models/          # Persisted model files (.pkl), auto-created on first save
-├── requirements.txt
-└── README.md
-```
-
----
-
-## Notes on R² Scores
-
-The app reports two R² values after training:
-
-- **R² — 5-fold CV** (green): cross-validated on the full dataset. Matches Tuning tab results. Use this as the reliable accuracy estimate.
-- **R² — single split**: trained on 80%, tested on 20%. Varies by random split; shown for reference only.
-
-Tuning scores may appear 2–5% higher than Prediction CV due to target encoding of high-cardinality columns (`district`, `city`) during the fast screening phase. This is expected — use Prediction CV R² as the ground-truth estimate.
-
----
-
-## License
-
-Proprietary / All rights reserved
+Python 3.9+. No database — state is in-memory per session.
