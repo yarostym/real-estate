@@ -51,25 +51,89 @@ def _autoload_data_folders():
 
 def add_derived_features(df):
     """Auto-engineer features that improve model quality."""
-    import datetime as _dt
+    import datetime as _dt, re as _re
     cy = _dt.datetime.now().year
+
+    # Age from year_built
     if 'year_built' in df.columns and 'age' not in df.columns:
         yb = pd.to_numeric(df['year_built'], errors='coerce')
         df['age'] = (cy - yb).clip(0, 200)
+
+    # Lot ratio
     if 'lot_size_sqft' in df.columns and 'floor_area_sqft' in df.columns and 'lot_ratio' not in df.columns:
         fa = pd.to_numeric(df['floor_area_sqft'], errors='coerce').replace(0, np.nan)
         df['lot_ratio'] = (pd.to_numeric(df['lot_size_sqft'], errors='coerce') / fa).clip(0, 100)
+
+    # Room density
     if 'rooms' in df.columns and 'floor_area_sqft' in df.columns and 'room_density' not in df.columns:
         fa = pd.to_numeric(df['floor_area_sqft'], errors='coerce').replace(0, np.nan)
         df['room_density'] = (pd.to_numeric(df['rooms'], errors='coerce') / fa * 100).clip(0, 10)
+
+    # Bath ratio
     if 'bathrooms' in df.columns and 'rooms' in df.columns and 'bath_ratio' not in df.columns:
         rm = pd.to_numeric(df['rooms'], errors='coerce').replace(0, np.nan)
         df['bath_ratio'] = (pd.to_numeric(df['bathrooms'], errors='coerce') / rm).clip(0, 2)
-    for nc, sc in [('has_view','view'),('has_fireplace','fireplace_features'),
+
+    # Parking features → structured numeric
+    if 'parking_spaces' in df.columns:
+        ps = df['parking_spaces'].fillna('').astype(str)
+        if 'n_parking_spaces' not in df.columns:
+            df['n_parking_spaces'] = ps.str.extract(r'Total spaces:\s*(\d+)').iloc[:,0].pipe(pd.to_numeric, errors='coerce').fillna(
+                ps.str.extract(r'(\d+)').iloc[:,0].pipe(pd.to_numeric, errors='coerce')).clip(0, 20)
+        if 'n_covered_parking' not in df.columns:
+            df['n_covered_parking'] = ps.str.extract(r'\((\d+)\s*covered\)').iloc[:,0].pipe(pd.to_numeric, errors='coerce').fillna(0).clip(0,20)
+        if 'has_garage' not in df.columns:
+            df['has_garage'] = ps.str.contains('Garage', case=False, na=False).astype(float)
+        if 'has_rv_parking' not in df.columns:
+            df['has_rv_parking'] = ps.str.contains('RV', case=False, na=False).astype(float)
+
+    # Fireplace → numeric count
+    if 'fireplace' in df.columns and 'n_fireplaces' not in df.columns:
+        fp = df['fireplace'].fillna('').astype(str)
+        df['n_fireplaces'] = fp.str.extract(r'^(\d+)').iloc[:,0].pipe(pd.to_numeric, errors='coerce').fillna(
+            fp.str.len().gt(2).astype(float)).clip(0, 5)
+        df['has_gas_fireplace'] = fp.str.contains('Gas', case=False, na=False).astype(float)
+
+    # Levels (number of floors)
+    if 'levels' in df.columns and 'n_levels' not in df.columns:
+        df['n_levels'] = pd.to_numeric(df['levels'], errors='coerce').clip(1, 5)
+
+    # Price per sqft ratio (listing vs district median) — proxy for over/under pricing
+    if 'floor_area_sqft' in df.columns and 'price' in df.columns and 'ppsf' not in df.columns:
+        price_num = pd.to_numeric(df['price'], errors='coerce')
+        fa_num    = pd.to_numeric(df['floor_area_sqft'], errors='coerce').replace(0, np.nan)
+        df['ppsf'] = (price_num / fa_num).clip(50, 10000)
+
+    # Days on market → log scale (0 = sold same day)
+    if 'days_on_market' in df.columns and 'log_dom' not in df.columns:
+        dom = pd.to_numeric(df['days_on_market'], errors='coerce').clip(0, 365)
+        df['log_dom'] = np.log1p(dom)
+
+    # GPS distance from city centre proxies
+    if 'latitude' in df.columns and 'longitude' in df.columns:
+        lat = pd.to_numeric(df['latitude'], errors='coerce')
+        lon = pd.to_numeric(df['longitude'], errors='coerce')
+        # Distance from approximate Vancouver centre (49.2827, -123.1207)
+        if 'dist_van_centre' not in df.columns:
+            df['dist_van_centre'] = (((lat - 49.2827)**2 + (lon - (-123.1207))**2)**0.5 * 111).clip(0, 200)
+
+    # Binary flags from text columns
+    for nc, sc in [('has_view','view'),('has_fireplace','fireplace_features'),('has_fireplace','fireplace'),
                    ('has_cooling','cooling_features'),('has_parking_feat','parking_features'),
                    ('has_appliances','appliances'),('has_interior','interior_features')]:
         if sc in df.columns and nc not in df.columns:
             df[nc] = df[sc].fillna('').astype(str).str.strip().str.len().gt(2).astype(float)
+
+    # Maintenance fee → has_strata flag
+    if 'maintenance_fee' in df.columns and 'has_strata' not in df.columns:
+        df['has_strata'] = pd.to_numeric(df['maintenance_fee'], errors='coerce').gt(0).astype(float)
+
+    # sold_price → price_discount (how much below asking)
+    if 'sold_price' in df.columns and 'price' in df.columns and 'price_discount_pct' not in df.columns:
+        sp = pd.to_numeric(df['sold_price'], errors='coerce')
+        lp = pd.to_numeric(df['price'], errors='coerce').replace(0, np.nan)
+        df['price_discount_pct'] = ((sp - lp) / lp * 100).clip(-30, 30)
+
     return df
 
 def clean_dataframe(df):
@@ -175,6 +239,11 @@ def upload_csv():
 
         df = clean_dataframe(df)
         df = add_derived_features(df)
+        # Mark source for file manager
+        fname = file.filename or 'primary'
+        df['_source']        = fname
+        df['_file_type']     = 'listings'
+        df['_sample_weight'] = 1.0
         uploaded_data['default'] = df
 
         # Detect city column heuristically
@@ -417,14 +486,27 @@ def ohe_multi_value(series, delimiter=',', existing_values=None):
 # ── Train ─────────────────────────────────────────────────────────────────────
 @app.route('/api/train', methods=['POST'])
 def train_model():
-    df = get_working_df()
-    if df is None:
+    df_full = get_working_df()
+    if df_full is None:
         return jsonify({'error': 'No data loaded'}), 400
 
     data         = request.json or {}
     target_col   = data.get('target_column')
     feature_cols = data.get('feature_columns', [])
     model_type   = data.get('model_type', 'random_forest')
+    train_source = data.get('train_source', '')
+    eval_source  = data.get('eval_source',  '')
+
+    # Split df into train and eval sets by _source if requested
+    if train_source and '_source' in df_full.columns:
+        df      = df_full[df_full['_source'] == train_source].reset_index(drop=True)
+        df_eval = df_full[df_full['_source'] == eval_source].reset_index(drop=True) if eval_source else None
+    elif eval_source and '_source' in df_full.columns:
+        df      = df_full[df_full['_source'] != eval_source].reset_index(drop=True)
+        df_eval = df_full[df_full['_source'] == eval_source].reset_index(drop=True)
+    else:
+        df      = df_full
+        df_eval = None
 
     if not target_col:
         return jsonify({'error': 'No target column selected'}), 400
@@ -609,6 +691,7 @@ def train_model():
             'encoders':         encoders,
             'feature_types':    feature_types,
             'use_log':          use_log,
+            'train_source':     train_source,
             '_te_stats':        {k: v['stats'] for k, v in encoders.items() if v.get('type') == 'target_encoded'},
             'r2_score':         round(r2, 4),
             'r2_cv':            round(r2_cv, 4) if r2_cv is not None else None,
@@ -627,12 +710,57 @@ def train_model():
 
         uploaded_data['default_model']['feature_importance'] = feature_importance
         uploaded_data['n_rows'] = train_n + test_n
+
+        # ── Eval on holdout dataset if provided ───────────────────────────
+        eval_r2, eval_mae, eval_n = None, None, 0
+        if df_eval is not None and len(df_eval) >= 5:
+            try:
+                df_ev = df_eval.copy()
+                df_ev[target_col] = pd.to_numeric(df_ev[target_col], errors='coerce')
+                df_ev = df_ev.dropna(subset=[target_col]).reset_index(drop=True)
+                y_ev  = df_ev[target_col].values.astype(float)
+                # Encode using saved encoders
+                X_ev_cols = []
+                for col in feature_cols:
+                    col_data = df_ev[col] if col in df_ev.columns else pd.Series(['Unknown']*len(df_ev))
+                    enc = encoders.get(col, {})
+                    enc_type = enc.get('type', 'numeric')
+                    if enc_type == 'multi_ohe':
+                        arr, _ = ohe_multi_value(col_data, existing_values=enc.get('values', []))
+                        for k in range(arr.shape[1]): X_ev_cols.append(arr[:, k])
+                    elif enc_type == 'target_encoded':
+                        te = {'stats': enc.get('stats', {})}
+                        med_map = enc.get('stats', {}).get('median', {})
+                        gm      = enc.get('stats', {}).get('global_median', float(np.median(y_fit)))
+                        X_ev_cols.append(col_data.map(med_map).fillna(gm).astype(float).values)
+                        ppsf_map = enc.get('stats', {}).get('ppsf', {})
+                        if ppsf_map:
+                            X_ev_cols.append(col_data.map(ppsf_map).fillna(gm/1000).astype(float).values)
+                    elif enc_type == 'categorical':
+                        X_ev_cols.append(col_data.astype(str).map(
+                            {c: i for i, c in enumerate(enc['classes'])}).fillna(0).astype(float).values)
+                    else:
+                        num = pd.to_numeric(col_data, errors='coerce')
+                        X_ev_cols.append(num.fillna(enc.get('mean', 0)).values.astype(float))
+                X_ev = np.column_stack(X_ev_cols) if len(X_ev_cols) > 1 else X_ev_cols[0].reshape(-1,1)
+                y_ev_pred = model.predict(X_ev)
+                if use_log and np.all(y_ev > 0): y_ev_pred = np.expm1(y_ev_pred)
+                eval_r2  = round(float(r2_score(y_ev, y_ev_pred)), 4)
+                eval_mae = round(float(mean_absolute_error(y_ev, y_ev_pred)), 0)
+                eval_n   = len(y_ev)
+            except Exception as _eval_e:
+                eval_r2 = None
         return jsonify({
             'success':             True,
             'r2_score':            round(r2, 4),
             'mae':                 round(mae, 2),
             'r2_cv':               round(r2_cv, 4) if r2_cv is not None else None,
             'mae_cv':              round(mae_cv, 2) if mae_cv is not None else None,
+            'eval_r2':             eval_r2,
+            'eval_mae':            eval_mae,
+            'eval_n':              eval_n,
+            'eval_source':         eval_source,
+            'train_source':        train_source,
             'train_size':          train_n,
             'test_size':           test_n,
             'outliers_removed':    outliers_removed,
@@ -1067,9 +1195,17 @@ def undervalued():
     top_n        = int(data.get('top_n', 9999))
     min_underval = float(data.get('min_underval_pct', 5))
 
-    # Start with the globally filtered dataset (same as training data)
-    # This ensures a model trained on Houses only scores Houses only
-    _wdf = get_working_df(); df = _wdf if _wdf is not None else df_full.copy()
+    score_source = data.get('score_source', '')  # which file to score (e.g. ads file)
+
+    # Get scoring dataset: prefer score_source, fall back to working df
+    _wdf = get_working_df()
+    df_base = _wdf if _wdf is not None else df_full.copy()
+    if score_source and '_source' in df_base.columns:
+        df = df_base[df_base['_source'] == score_source].reset_index(drop=True)
+        if len(df) == 0:
+            return jsonify({'error': f'No rows found for source: {score_source}'}), 400
+    else:
+        df = df_base
 
     # Apply additional city filter from the Undervalued sidebar
     city_col = uploaded_data.get('city_col')
@@ -1082,6 +1218,17 @@ def undervalued():
     encoders     = model_data['encoders']
     target_col   = model_data['target_col']
     use_log      = model_data.get('use_log', False)
+
+    # When scoring ads: target_col may be 'sold_price' (from training) but
+    # ads file only has 'price'. Fall back to best available price column.
+    price_candidates = ['sold_price', 'price', 'list_price', 'asking_price']
+    if target_col not in df.columns or pd.to_numeric(df[target_col], errors='coerce').isna().all():
+        for alt in price_candidates:
+            if alt in df.columns and not pd.to_numeric(df[alt], errors='coerce').isna().all():
+                target_col = alt
+                break
+        else:
+            return jsonify({'error': f'No usable price column found in scoring dataset. Available: {[c for c in df.columns if "price" in c.lower()]}'}), 400
 
     # Build feature matrix for every row (skip rows missing target or key features)
     type_filter  = data.get('type_filter', [])
@@ -1592,17 +1739,34 @@ def version():
 # ── Comparable Listings (Comps) ───────────────────────────────────────────────
 @app.route('/api/comps', methods=['POST'])
 def get_comps():
-    """Return all training listings from the same district (comparables used for confidence)."""
-    df_train   = get_working_df()
+    """Return comparable sold listings from the same district."""
+    df_all     = get_working_df()
     model_data = uploaded_data.get('default_model')
 
-    if df_train is None:
+    if df_all is None:
         return jsonify({'error': 'No data loaded'}), 400
 
     data        = request.json or {}
     district    = data.get('district', '')
     city        = data.get('city', '')
     target_col  = model_data['target_col'] if model_data else 'price'
+
+    # Use training source if available (sold data), otherwise all data
+    train_source = model_data.get('train_source', '') if model_data else ''
+    if train_source and '_source' in df_all.columns:
+        df_train = df_all[df_all['_source'] == train_source].reset_index(drop=True)
+    else:
+        # Fall back: use rows that have valid target_col values (i.e. sold rows)
+        df_train = df_all.copy()
+        if target_col in df_train.columns:
+            valid_mask = pd.to_numeric(df_train[target_col], errors='coerce').notna()
+            if valid_mask.sum() > 0:
+                df_train = df_train[valid_mask].reset_index(drop=True)
+            else:
+                # target is sold_price but none available → use price
+                alt_price = next((c for c in ['price','list_price'] if c in df_train.columns), None)
+                if alt_price:
+                    target_col = alt_price
     # Query listing details used to filter comps
 
     # Listings from same district
@@ -2184,12 +2348,21 @@ def tune_batch():
 
     data             = request.json or {}
     target_col       = data.get('target_column', 'price')
-    combos           = data.get('combos', [])          # list of feature lists
-    model_type_req   = data.get('model_type', 'rf_fast')  # rf_fast | rf_full | gb | linear
+    combos           = data.get('combos', [])
+    model_type_req   = data.get('model_type', 'rf_fast')
     use_log          = data.get('use_log_target', True)
     remove_out       = data.get('remove_outliers', True)
     n_threads        = min(max(1, int(data.get('n_threads', 1))), (_os.cpu_count() or 4) * 2)
     n_jobs_per_model = int(data.get('n_jobs', -1))
+    tune_source      = data.get('tune_source', '')   # filter to specific _source file
+
+    # Filter df to tune_source if specified
+    if tune_source and '_source' in df.columns:
+        df_tune = df[df['_source'] == tune_source].reset_index(drop=True)
+        if len(df_tune) < 10:
+            return jsonify({'error': f'Only {len(df_tune)} rows in {tune_source}'}), 400
+    else:
+        df_tune = df
 
     if not combos:
         return jsonify({'results': [], 'n': 0})
@@ -2215,9 +2388,8 @@ def tune_batch():
     # Inline quick_cv (same logic as tune_model)
     def _quick_cv(feat_list):
         try:
-            # Use full df for target encoding (includes sqft for ppsf) then slice to feat_list rows
-            cols_needed = [c for c in feat_list if c in df.columns]
-            df_m = df[cols_needed + [target_col]].dropna(subset=[target_col]).reset_index(drop=True)
+            cols_needed = [c for c in feat_list if c in df_tune.columns]
+            df_m = df_tune[cols_needed + [target_col]].dropna(subset=[target_col]).reset_index(drop=True)
             df_m[target_col] = pd.to_numeric(df_m[target_col], errors='coerce')
             df_m = df_m.dropna(subset=[target_col]).reset_index(drop=True)
             if len(df_m) < 8: return feat_list, None, None
@@ -2461,7 +2633,21 @@ def overvalued():
     use_log      = model_data.get('use_log', True)
     model        = model_data['model']
 
-    df_score = df.copy()
+    score_source = data.get('score_source', '')
+    _wdf_ov = get_working_df()
+    df_base_ov = _wdf_ov if _wdf_ov is not None else df.copy()
+    if score_source and '_source' in df_base_ov.columns:
+        df_score = df_base_ov[df_base_ov['_source'] == score_source].reset_index(drop=True)
+    else:
+        df_score = df_base_ov.copy()
+
+    # Fall back to 'price' if target_col is missing or all-null in scoring dataset
+    price_candidates = ['sold_price', 'price', 'list_price', 'asking_price']
+    if target_col not in df_score.columns or pd.to_numeric(df_score[target_col], errors='coerce').isna().all():
+        for alt in price_candidates:
+            if alt in df_score.columns and not pd.to_numeric(df_score[alt], errors='coerce').isna().all():
+                target_col = alt
+                break
     df_score[target_col] = pd.to_numeric(df_score[target_col], errors='coerce')
     df_score = df_score.dropna(subset=[target_col]).reset_index(drop=True)
     # Remove price outliers before scoring
@@ -2637,15 +2823,18 @@ def smart_feature_select():
     Client uses this to pre-select Tuning candidates above a threshold.
     Uses proper target encoding (same as train_model) for accuracy.
     """
-    df = get_working_df()
-    if df is None:
+    df_all = get_working_df()
+    if df_all is None:
         return jsonify({'error': 'No data loaded'}), 400
 
-    data       = request.json or {}
-    target_col = data.get('target_column', 'price')
-    threshold  = float(data.get('threshold', 0.5))   # min importance % to include
-    use_log    = data.get('use_log_target', True)
-    rm_out     = data.get('remove_outliers', True)
+    data        = request.json or {}
+    target_col  = data.get('target_column', 'price')
+    threshold   = float(data.get('threshold', 0.5))
+    use_log     = data.get('use_log_target', True)
+    rm_out      = data.get('remove_outliers', True)
+    tune_source = data.get('tune_source', '')
+    df = df_all[df_all['_source']==tune_source].reset_index(drop=True) \
+         if tune_source and '_source' in df_all.columns else df_all
 
     # Candidate features: all numeric + categorical (skip IDs/URLs/internal)
     skip = {'listing_id','real_mls','mls','summary_url','virtual_tour','street',

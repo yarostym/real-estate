@@ -587,17 +587,35 @@
 
   <div class="sidebar">
     <div class="section-label">Upload Data</div>
-    <label for="csv-input" id="upload-label" style="display:block;cursor:pointer">
-      <input type="file" id="csv-input" accept=".csv" style="display:none">
-      <div class="upload-zone" id="upload-zone">
-        <div class="upload-icon">📂</div>
-        <div class="upload-title">Drag & drop CSV file</div>
-        <div class="upload-sub">or click to browse</div>
-      </div>
-    </label>
+
+    <!-- Primary upload: Sold (first — most important) -->
+    <div style="margin-bottom:6px">
+      <div style="font-size:10px;font-weight:600;color:var(--accent2);margin-bottom:3px">💰 Sold properties <span style="font-weight:400;color:var(--text3)">(train model on this)</span></div>
+      <label for="sold-input" style="display:block;cursor:pointer">
+        <input type="file" id="sold-input" accept=".csv" style="display:none" onchange="uploadSoldFile()">
+        <div class="upload-zone" id="sold-zone" style="padding:10px;border-color:var(--accent2)">
+          <div class="upload-icon" style="font-size:20px">💰</div>
+          <div class="upload-title" style="font-size:12px">Drop sold CSV</div>
+          <div class="upload-sub" style="font-size:10px">weight ×3 · model trains here</div>
+        </div>
+      </label>
+    </div>
+
+    <!-- Secondary upload: Listings (ads to analyse) -->
+    <div style="margin-bottom:8px">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:3px">📋 Listings (ads) <span style="color:var(--text3)">(score/analyse these)</span></div>
+      <label for="csv-input" id="upload-label" style="display:block;cursor:pointer">
+        <input type="file" id="csv-input" accept=".csv" style="display:none">
+        <div class="upload-zone" id="upload-zone" style="padding:10px">
+          <div class="upload-icon" style="font-size:20px">📂</div>
+          <div class="upload-title" style="font-size:12px">Drop listings CSV</div>
+          <div class="upload-sub" style="font-size:10px">or click to browse</div>
+        </div>
+      </label>
+    </div>
 
     <!-- File Manager -->
-    <div id="file-manager" style="margin-top:10px;display:none">
+    <div id="file-manager" style="margin-top:4px;display:none">
       <div class="section-label" style="display:flex;align-items:center;justify-content:space-between">
         Loaded Files
         <span style="display:flex;gap:4px">
@@ -743,7 +761,29 @@
         Log-transform target <span style="font-size:10px;color:var(--text3)">(better R² on skewed prices)</span>
       </label>
 
-      <div style="display:flex;gap:8px;margin-top:0">
+      <!-- Train / Eval dataset split -->
+      <div id="train-eval-panel" style="display:none;margin-top:10px;padding:10px;background:var(--bg);border:1px solid var(--border2);border-radius:8px">
+        <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:8px">
+          Train / Eval split
+          <span style="font-size:10px;color:var(--text3);font-weight:400;margin-left:6px">Train on one file, evaluate on another</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div>
+            <div style="font-size:10px;color:var(--text3);margin-bottom:2px">Train on</div>
+            <select id="train-source-sel" style="width:100%;padding:5px;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:11px">
+              <option value="">All files</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text3);margin-bottom:2px">Evaluate on</div>
+            <select id="eval-source-sel" style="width:100%;padding:5px;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:11px">
+              <option value="">Same (CV on train)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:8px">
         <button class="btn-primary" id="train-btn" onclick="trainModel()" style="flex:1;margin:0">
           Train Model
         </button>
@@ -1034,6 +1074,23 @@
 <!-- ====== UNDERVALUED PAGE ====== -->
 <div class="page" id="page-undervalued">
   <div class="sidebar">
+    <!-- Workflow summary -->
+    <div id="uv-workflow-panel" style="margin-bottom:12px;padding:10px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;display:none">
+      <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;margin-bottom:8px">Analysis pipeline</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="font-size:11px">
+          <span style="color:var(--text3)">Model trained on:</span><br>
+          <span id="uv-train-source-label" style="font-weight:600;color:var(--text)">—</span>
+        </div>
+        <div style="font-size:11px">
+          <span style="color:var(--text3)">Scoring (ads to analyse):</span>
+          <select id="uv-score-source" style="width:100%;margin-top:3px;padding:4px;background:var(--surface);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:11px">
+            <option value="">All files</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
     <div id="uv-upload-msg">
       <div class="section-label">Status</div>
       <div style="font-size:13px;color:var(--text3);line-height:1.6;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
@@ -1221,14 +1278,18 @@
       <div id="smart-select-panel" style="display:none;margin-bottom:10px;padding:8px 10px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;font-size:11px">
         <div style="font-weight:600;color:var(--text);margin-bottom:6px">Feature importance (all features trained)</div>
         <div id="smart-select-bars"></div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
-          <span style="color:var(--text3)">Threshold:</span>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="color:var(--text3);font-size:11px">Threshold:</span>
           <input type="number" id="smart-threshold" value="0.5" min="0.1" max="10" step="0.1"
-                 style="width:60px;padding:3px 6px;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:11px">
-          <span style="color:var(--text3)">%</span>
+                 style="width:56px;padding:3px 6px;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:11px">
+          <span style="color:var(--text3);font-size:11px">%</span>
           <button onclick="applySmartSelection()"
-                  style="padding:3px 10px;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600">
-            Apply
+                  style="padding:3px 12px;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600">
+            ✓ Apply to list
+          </button>
+          <button onclick="document.getElementById('smart-select-panel').style.display='none'"
+                  style="padding:3px 8px;background:transparent;border:1px solid var(--border2);border-radius:5px;cursor:pointer;font-size:11px;color:var(--text3)">
+            ✕
           </button>
         </div>
       </div>
@@ -1273,6 +1334,17 @@
       <label class="check-item" style="padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border2)">
         <input type="checkbox" id="tune-outliers" checked> Remove outliers
       </label>
+
+      <!-- Tune on specific dataset -->
+      <div id="tune-source-panel" style="display:none;margin-top:8px">
+        <div class="section-label">Tune on dataset</div>
+        <select id="tune-source-sel"
+                style="width:100%;padding:6px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px"
+                title="Choose which file to use for tuning">
+          <option value="">All files (merged)</option>
+        </select>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">Tip: tune on sold data for most accurate R²</div>
+      </div>
       <div style="display:flex;gap:6px;margin-top:12px">
         <button onclick="saveTunePreset()" title="Save current feature selection"
                 style="flex:1;padding:7px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text2);cursor:pointer;font-size:11px">💾 Save</button>
@@ -1496,13 +1568,26 @@ function setupPredictionUI(data) {
     targetSel.innerHTML += `<option value="${col}">${col}</option>`;
   });
 
-  // Auto-select likely price/target column
-  const priceHints = ['price', 'list_price', 'cost', 'value', 'sale'];
-  let autoIdx = -1;
-  data.all_columns.forEach((col, i) => {
-    if (priceHints.some(h => col.toLowerCase().includes(h))) autoIdx = i;
-  });
-  if (autoIdx >= 0) targetSel.selectedIndex = autoIdx;
+  // Auto-select target column:
+  // If sold_price exists → prefer it (actual transaction price)
+  // Otherwise fallback to 'price' or first price-like column
+  const cols = data.all_columns;
+  const hasSoldPrice = cols.includes('sold_price');
+  let autoTarget = null;
+  if (hasSoldPrice) {
+    autoTarget = 'sold_price';  // sold datasets: use actual sold price
+  } else {
+    // listing datasets: use 'price' (asking price)
+    const priceHints = ['price', 'list_price', 'asking', 'cost', 'value'];
+    for (const hint of priceHints) {
+      const found = cols.find(c => c.toLowerCase() === hint);
+      if (found) { autoTarget = found; break; }
+    }
+    if (!autoTarget) {
+      autoTarget = cols.find(c => priceHints.some(h => c.toLowerCase().includes(h)));
+    }
+  }
+  if (autoTarget) targetSel.value = autoTarget;
 
   // Feature list — numeric + categorical columns, exclude obvious ID/URL cols
   const skipHints = ['url', 'link', 'mls', 'address', 'notes', 'brokerage', 'agent', '_source', '_file_type', '_sample_weight'];
@@ -1947,7 +2032,15 @@ function trainModel() {
   fetch('/api/train', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ target_column: target, feature_columns: features, model_type: modelType, remove_outliers: document.getElementById('remove-outliers').checked, use_log_target: document.getElementById('use-log-target').checked })
+    body: JSON.stringify({
+      target_column:   target,
+      feature_columns: features,
+      model_type:      modelType,
+      remove_outliers: document.getElementById('remove-outliers').checked,
+      use_log_target:  document.getElementById('use-log-target').checked,
+      train_source:    document.getElementById('train-source-sel')?.value || '',
+      eval_source:     document.getElementById('eval-source-sel')?.value  || '',
+    })
   })
   .then(r => r.json())
   .then(data => {
@@ -1967,6 +2060,7 @@ function trainModel() {
     const ptEnc = data.encoders?.property_type || data.encoders?.type;
     if (ptEnc?.classes) appData._property_types = ptEnc.classes;
     showUndervaluedControls();
+    updateUvWorkflowPanel(data);
     document.getElementById('analyse-btn').style.display = 'block';
   })
   .catch(e => { btn.disabled = false; btn.textContent = 'Train Model'; console.error('Train fetch error:', e); showToast('Network error: ' + e.message, 'error'); });
@@ -2008,6 +2102,34 @@ function showPredResults(data) {
   if (data.outliers_removed > 0) {
     showToast(`Removed ${data.outliers_removed} outlier rows before training`, 'success');
   }
+  // Show holdout eval results if available
+  const existEp = document.getElementById('eval-results-panel');
+  if (existEp) existEp.remove();
+  if (data.eval_r2 != null) {
+    const ep = document.createElement('div');
+    ep.id = 'eval-results-panel';
+    ep.style.cssText = 'margin-top:12px;padding:10px 14px;background:var(--surface);border:1px solid var(--accent2);border-radius:8px';
+    const evR2    = (data.eval_r2 * 100).toFixed(1);
+    const cvR2    = ((data.r2_cv||0)*100).toFixed(1);
+    const evColor = data.eval_r2>0.7?'var(--success)':data.eval_r2>0.4?'var(--accent3)':'var(--danger)';
+    const diff    = (data.eval_r2 - (data.r2_cv||0)) * 100;
+    const diffStr = (diff>=0?'+':'')+diff.toFixed(1)+'%';
+    const diffColor = Math.abs(diff)<3?'var(--text3)':diff>0?'var(--success)':'var(--danger)';
+    ep.innerHTML = '<div style="font-size:10px;color:var(--accent2);font-weight:600;text-transform:uppercase;margin-bottom:8px">'
+      + '📊 Holdout eval: ' + (data.eval_source||'test set') + ' ('+data.eval_n+' rows)</div>'
+      + '<div style="display:flex;gap:20px;align-items:flex-end">'
+      + '<div><div style="font-size:24px;font-weight:700;color:'+evColor+';font-family:var(--mono)">'+evR2+'%</div>'
+      + '<div style="font-size:10px;color:var(--text3)">R² on holdout</div></div>'
+      + '<div><div style="font-size:20px;font-weight:700;color:var(--accent);font-family:var(--mono)">$'+(data.eval_mae/1000).toFixed(0)+'K</div>'
+      + '<div style="font-size:10px;color:var(--text3)">MAE on holdout</div></div>'
+      + '<div style="margin-left:auto;text-align:right">'
+      + '<div style="font-size:13px;font-weight:600;color:'+diffColor+'">'+diffStr+'</div>'
+      + '<div style="font-size:10px;color:var(--text3)">vs CV '+cvR2+'%</div></div>'
+      + '</div>'
+      + (Math.abs(diff)>5?'<div style="font-size:10px;color:var(--accent3);margin-top:6px">⚠️ Large gap — model may not generalise well to this dataset</div>':'');
+    document.getElementById('pred-results').insertBefore(ep, document.getElementById('pred-results').firstChild);
+  }
+
   // Explain R² score in plain language
   const r2Note = document.getElementById('r2-note');
   if (r2Note) {
@@ -2923,6 +3045,24 @@ function setupUndervaluedUI(data) {
   // cities already set in setupCityFilter
 }
 
+function updateUvWorkflowPanel(trainData) {
+  const panel = document.getElementById('uv-workflow-panel');
+  const label = document.getElementById('uv-train-source-label');
+  const sel   = document.getElementById('uv-score-source');
+  if (!panel) return;
+  panel.style.display = 'block';
+  if (label) label.textContent = (trainData?.train_source||'all data').split('/').pop() || 'all data';
+  fetch('/api/files').then(r=>r.json()).then(d => {
+    const files = (d.files||[]).filter(f=>!f.excluded);
+    if (sel) {
+      sel.innerHTML = '<option value="">All files</option>'
+        + files.map(f=>'<option value="'+f.name+'">'+(f.type==='sold'?'💰 ':'📋 ')+f.name+' ('+f.rows+'r)</option>').join('');
+      const listFile = files.find(f=>f.type==='listings');
+      if (listFile) sel.value = listFile.name;
+    }
+  }).catch(()=>{});
+}
+
 function showUndervaluedControls() {
   document.getElementById('uv-upload-msg').style.display = 'none';
   document.getElementById('uv-controls').style.display   = 'block';
@@ -2956,6 +3096,7 @@ function runUndervalued() {
     : [];
   const minPct  = parseFloat(document.getElementById('uv-min-pct').value);
   const topN    = parseInt(document.getElementById('uv-top-n').value);
+  const scoreSrc = document.getElementById('uv-score-source')?.value || '';
 
   const btn = document.querySelector('#page-undervalued .btn-primary');
   btn.disabled = true;
@@ -2976,7 +3117,8 @@ function runUndervalued() {
                            type_filter: typeFilter, require_sqft: true, min_confidence: minConf,
                            min_beds: minBeds ? parseFloat(minBeds) : null,
                            min_baths: minBaths ? parseFloat(minBaths) : null,
-                           cat_filters: getCatFilters() })
+                           cat_filters: getCatFilters(),
+                           score_source: scoreSrc })
   })
   .then(r => r.json())
   .then(data => {
@@ -3132,7 +3274,11 @@ function toggleComps(btn, idx) {
 function renderComps(panel, data) {
   const fmt = v => '$' + Math.round(v).toLocaleString('en-CA');
   const target = data.target_col;
-  if (!data.comps || !data.comps.length) { panel.innerHTML = '<div style="font-size:11px;color:var(--text3)">No comparable listings found in this district.</div>'; return; }
+  if (!data.comps || !data.comps.length) {
+    panel.innerHTML = '<div style="font-size:11px;color:var(--text3)">No comparable sold listings found for this district in the training dataset.'
+      + (data.district ? ' Try adding more sold data for <b>'+data.district+'</b>.' : '') + '</div>';
+    return;
+  }
   const prices = data.comps.map(c => c[target]).filter(Boolean).sort((a,b) => a-b);
   const median = prices.length ? fmt(prices[Math.floor(prices.length/2)]) : '?';
   const minP   = prices.length ? fmt(prices[0]) : '?';
@@ -3277,6 +3423,7 @@ async function runOvervalued() {
         min_over_pct: parseFloat(document.getElementById('ov-min-pct')?.value)||5,
         city: document.getElementById('ov-city')?.value||'',
         property_type: document.getElementById('ov-type')?.value||'',
+        score_source: document.getElementById('uv-score-source')?.value||'',
       })
     });
     const d = await r.json();
@@ -3354,26 +3501,47 @@ async function toggleDemo() {
 // =================== MULTI-FILE UPLOAD ===================
 async function uploadExtraFile() {
   const input = document.getElementById('extra-file-input');
-  const file  = input.files[0];
+  const file  = input?.files[0];
   if (!file) return;
-  const ftype = document.getElementById('extra-file-type')?.value || 'listings';
-  const fd    = new FormData();
+  await _uploadFileAs(file, document.getElementById('extra-file-type')?.value || 'listings');
+  if (input) input.value = '';
+}
+
+async function uploadSoldFile() {
+  const input = document.getElementById('sold-input');
+  const file  = input?.files[0];
+  if (!file) return;
+  await _uploadFileAs(file, 'sold');
+  if (input) input.value = '';
+}
+
+async function _uploadFileAs(file, ftype) {
+  const fd = new FormData();
   fd.append('file', file);
   fd.append('file_type', ftype);
-  fd.append('weight', ftype==='sold' ? '3' : '1');
+  fd.append('weight', ftype === 'sold' ? '3' : '1');
   showToast('Adding ' + file.name + '...', 'success');
   try {
     const r = await fetch('/api/upload_extra', {method:'POST', body: fd});
     const d = await r.json();
-    if (d.error) { showToast(d.error,'error'); return; }
+    if (d.error) { showToast(d.error, 'error'); return; }
     showToast(`Added ${d.new_rows} rows from ${file.name}. Total: ${d.rows} rows`, 'success');
-    // Update files list
-    const list = document.getElementById('extra-files-list');
-    const icon = ftype==='sold'?'💰':'📋';
-    list.innerHTML += `<div>${icon} ${file.name} — ${d.new_rows} rows (${ftype})</div>`;
     setStatus(true, `${d.rows} rows · multiple files`);
-  } catch(e) { showToast('Upload error: '+e.message,'error'); }
-  input.value = '';
+    // Refresh column lists with updated row count
+    fetch('/api/upload_meta').then(r=>r.json()).then(meta => {
+      if (!meta.error) {
+        setupTuningUI(meta);
+        setupCatFilters(meta);
+      }
+    }).catch(()=>{});
+    // Update sold zone label if sold file
+    if (ftype === 'sold') {
+      const sz = document.getElementById('sold-zone');
+      if (sz) sz.innerHTML = '<div style="font-size:20px">💰</div><div style="font-size:12px;color:var(--success)">' + file.name + '</div><div style="font-size:10px;color:var(--text3)">' + d.new_rows + ' rows loaded</div>';
+    }
+    document.getElementById('file-manager').style.display = 'block';
+    loadFileManager();
+  } catch(e) { showToast('Upload error: ' + e.message, 'error'); }
 }
 // =================== END MULTI-FILE UPLOAD ===================
 
@@ -3409,6 +3577,37 @@ async function loadFileManager() {
   } catch(e) {}
 }
 
+function updateTrainEvalSelectors(files) {
+  const trainSel = document.getElementById('train-source-sel');
+  const evalSel  = document.getElementById('eval-source-sel');
+  const panel    = document.getElementById('train-eval-panel');
+  if (!trainSel || !evalSel) return;
+  const active = (files || []).filter(f => !f.excluded);
+  if (panel) panel.style.display = active.length >= 2 ? 'block' : 'none';
+  const mkOpt = (f, allLabel) =>
+    '<option value="">'+allLabel+'</option>' +
+    active.map(f => '<option value="'+f.name+'">'+(f.type==='sold'?'💰 ':'📋 ')+f.name+' ('+f.rows+'r)</option>').join('');
+  trainSel.innerHTML = mkOpt(null, 'All files');
+  evalSel.innerHTML  = '<option value="">Same (CV on train)</option>' +
+    active.map(f => '<option value="'+f.name+'">'+(f.type==='sold'?'💰 ':'📋 ')+f.name+' ('+f.rows+'r)</option>').join('');
+  const soldFile = active.find(f => f.type === 'sold');
+  const listFile = active.find(f => f.type === 'listings');
+  if (soldFile && listFile) {
+    trainSel.value = soldFile.name;    // train on sold
+    evalSel.value  = listFile.name;    // evaluate on listings (optional)
+  }
+
+  // Tune source selector
+  const tuneSel   = document.getElementById('tune-source-sel');
+  const tunePanel = document.getElementById('tune-source-panel');
+  if (tuneSel) {
+    tuneSel.innerHTML = '<option value="">All files (merged)</option>'
+      + active.map(f => '<option value="'+f.name+'">'+(f.type==='sold'?'💰 ':'📋 ')+f.name+' ('+f.rows+'r)</option>').join('');
+    if (soldFile) tuneSel.value = soldFile.name;
+  }
+  if (tunePanel) tunePanel.style.display = active.length >= 2 ? 'block' : 'none';
+}
+
 function renderFileManager(d) {
   const list  = document.getElementById('file-manager-list');
   const total = document.getElementById('file-manager-total');
@@ -3436,6 +3635,7 @@ function renderFileManager(d) {
     list.appendChild(row);
   });
   if (total) total.textContent = 'Active: ' + (d.total_rows || 0) + ' rows';
+  updateTrainEvalSelectors(d.files);
 }
 
 async function _fileManagerAction(files, idx, action, weight) {
@@ -3618,8 +3818,15 @@ function setupTuningUI(data) {
   const tsel = document.getElementById('tune-target');
   tsel.innerHTML = '';
   data.numeric_columns.forEach(col => { tsel.innerHTML += '<option value="'+col+'">'+col+'</option>'; });
-  const ph = ['price','list_price','cost','value'];
-  data.numeric_columns.forEach((col,i) => { if (ph.some(h => col.toLowerCase().includes(h))) tsel.selectedIndex = i; });
+  // Prefer sold_price if available, else price
+  const tuneCols = data.numeric_columns;
+  if (tuneCols.includes('sold_price')) tsel.value = 'sold_price';
+  else {
+    const ph = ['price','list_price','cost','value'];
+    const found = tuneCols.find(c => c.toLowerCase() === 'price')
+               || tuneCols.find(c => ph.some(h => c.toLowerCase().includes(h)));
+    if (found) tsel.value = found;
+  }
   const list = document.getElementById('tune-feature-list');
   const nullR = data.null_rates || {};
   list.innerHTML = '';
@@ -3630,13 +3837,42 @@ function setupTuningUI(data) {
       const nr = nullR[col] || 0;
       const ok = nr <= 0.4;
       const pct = Math.round(nr * 100);
-      const nb = pct > 0 ? '<span style="font-size:10px;color:'+(pct>40?'var(--danger)':'var(--text3)')+';margin-left:4px">'+pct+'% null</span>' : '';
       const lbl = document.createElement('label');
       lbl.className = 'check-item';
-      lbl.style.cssText = (ok ? '' : 'opacity:0.5') + ';display:flex;align-items:center;justify-content:space-between;gap:4px';
-      lbl.innerHTML = '<span style="display:flex;align-items:center;gap:4px;flex:1"><input type="checkbox" value="'+col+'" '+(ok?'checked':'')+' onchange="updateTuneEstimate()"> '+col+nb+'</span>'
-        + '<button type="button" title="Mark as required (always included in every combination)" onclick="toggleRequired(this,event)"'
-        + ' style="padding:0 5px;height:18px;background:transparent;border:1px solid var(--border2);border-radius:4px;cursor:pointer;font-size:10px;color:var(--text3);flex-shrink:0">pin</button>';
+      lbl.style.cssText = (ok ? '' : 'opacity:0.45') + ';display:flex;align-items:center;gap:5px;padding:3px 4px;cursor:pointer';
+
+      // ① Checkbox — leftmost
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.value = col; if (ok) cb.checked = true;
+      cb.style.cssText = 'flex-shrink:0;cursor:pointer;width:14px;height:14px';
+      cb.addEventListener('change', updateTuneEstimate);
+
+      // ② Column name
+      const nameSpan = document.createElement('span');
+      nameSpan.style.cssText = 'flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0';
+      nameSpan.textContent = col;
+
+      // ③ Null badge (only if significant)
+      if (pct > 0) {
+        const nullBadge = document.createElement('span');
+        nullBadge.style.cssText = 'font-size:9px;color:'+(pct>40?'var(--danger)':'var(--text3)')+';flex-shrink:0;white-space:nowrap';
+        nullBadge.textContent = pct+'% ∅';
+        lbl.appendChild(cb);
+        lbl.appendChild(nameSpan);
+        lbl.appendChild(nullBadge);
+      } else {
+        lbl.appendChild(cb);
+        lbl.appendChild(nameSpan);
+      }
+
+      // ④ Pin button — rightmost
+      const pinBtn = document.createElement('button');
+      pinBtn.type = 'button';
+      pinBtn.title = 'Pin as required (always included)';
+      pinBtn.style.cssText = 'padding:0 4px;height:16px;background:transparent;border:1px solid var(--border2);border-radius:3px;cursor:pointer;font-size:9px;color:var(--text3);flex-shrink:0;line-height:1';
+      pinBtn.textContent = '📌';
+      pinBtn.addEventListener('click', e => toggleRequired(pinBtn, e));
+      lbl.appendChild(pinBtn);
       list.appendChild(lbl);
     });
   setTimeout(() => {
@@ -3761,7 +3997,11 @@ function runTuning() {
 
   const _taf = (typeof getGlobalFilters==='function') ? getGlobalFilters() : {};
   const _tafParts = Object.entries(_taf).map(([k,v]) => Array.isArray(v) ? k+': '+v.join(', ') : k+': '+v);
-  document.getElementById('tune-progress-text').textContent = (_tafParts.length ? 'Filter: '+_tafParts.join(' - ')+'. ' : '') + totalTests + ' combos, batches of '+batchSz+', '+nThr+' threads';
+  const _tuneSrc = document.getElementById('tune-source-sel')?.value;
+  const _srcLabel = _tuneSrc ? '  Dataset: '+_tuneSrc.split('/').pop() : '';
+  // Note: total increases in Pass 2/3 — show estimated
+  document.getElementById('tune-progress-text').textContent = 'Pass 1: '+totalTests+' combos (total grows after each pass)' + (_srcLabel ? ' · '+_srcLabel : '');
+  document.getElementById('tune-progress-badge').textContent = '0 / ~'+totalTests+' tests (est.)';
 
   _tuneStop   = false;
   _tuneAllRes = [];
@@ -3825,6 +4065,7 @@ async function runBatchPhase(combos, modelType, phaseName, totalTests, doneOffse
           combos: batch, target_column: target, model_type: modelType,
           use_log_target: useLog, remove_outliers: rmOut,
           n_threads: nThr, n_jobs: nJobs,
+          tune_source: document.getElementById('tune-source-sel')?.value || '',
         })
       });
       const d = await resp.json();
@@ -3912,6 +4153,7 @@ async function runSmartFeatureSelect() {
         threshold: parseFloat(document.getElementById('smart-threshold')?.value || '0.5'),
         use_log_target: document.getElementById('tune-log')?.checked ?? true,
         remove_outliers: document.getElementById('tune-outliers')?.checked ?? true,
+        tune_source: document.getElementById('tune-source-sel')?.value || '',
       })
     });
     const d = await r.json();
@@ -3933,28 +4175,82 @@ function renderSmartSelectBars(d) {
   const shadowPct = d.shadow_threshold || 0;
   const maxImp    = ranked[0]?.[1] || 1;
 
+  // Get currently checked features in the tune list
+  const checkedInList = new Set(
+    [...document.querySelectorAll('#tune-feature-list input[type=checkbox]:checked')].map(c => c.value)
+  );
+
   let header = '';
   if (shadowPct > 0) {
     header = '<div style="font-size:10px;color:var(--accent2);margin-bottom:6px;padding:4px 6px;background:var(--surface2);border-radius:5px">'
-      + '📊 Shadow threshold: <b>' + shadowPct + '%</b> — features below this are statistically indistinguishable from random noise'
+      + '📊 Shadow noise floor: <b>' + shadowPct + '%</b>'
       + '</div>';
   }
 
-  bars.innerHTML = header + ranked.map(([f, pct]) => {
-    const barW   = Math.round(pct / maxImp * 100);
-    const st     = status[f] || (pct >= (shadowPct || threshold) ? 'real' : 'noise');
-    const color  = st==='real' ? 'var(--success)' : st==='maybe' ? 'var(--accent3)' : 'var(--text3)';
-    const icon   = st==='real' ? '✅' : st==='maybe' ? '〜' : '❌';
-    const dim    = st==='noise' ? 'opacity:0.4' : '';
-    return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;'+dim+'">'
-      + '<span style="min-width:14px;font-size:10px">'+icon+'</span>'
-      + '<span style="min-width:110px;font-size:10px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+f+'</span>'
-      + '<div style="flex:1;background:var(--border);border-radius:3px;height:12px;position:relative;min-width:30px">'
-      + '<div style="height:100%;width:'+barW+'%;background:'+color+';border-radius:3px"></div>'
-      + '</div>'
-      + '<span style="min-width:42px;font-size:10px;font-family:var(--mono);color:'+color+';text-align:right">'+pct+'%</span>'
-      + '</div>';
-  }).join('');
+  bars.innerHTML = '';
+
+  // Shadow header
+  if (shadowPct > 0) {
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'font-size:10px;color:var(--accent2);margin-bottom:6px;padding:4px 6px;background:var(--surface2);border-radius:5px';
+    hdr.innerHTML = '📊 Shadow noise floor: <b>' + shadowPct + '%</b>';
+    bars.appendChild(hdr);
+  }
+
+  ranked.forEach(([f, pct]) => {
+    const barW  = Math.round(pct / maxImp * 100);
+    const st    = status[f] || (pct >= (shadowPct || threshold) ? 'real' : 'noise');
+    const color = st==='real' ? 'var(--success)' : st==='maybe' ? 'var(--accent3)' : 'var(--text3)';
+    const icon  = st==='real' ? '✅' : st==='maybe' ? '〜' : '❌';
+    const inList = checkedInList.has(f);
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:5px;margin-bottom:4px;cursor:pointer';
+
+    // ① Checkbox LEFT — mirrors Candidate Features list
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = inList;
+    cb.style.cssText = 'flex-shrink:0;width:14px;height:14px;cursor:pointer';
+    cb.addEventListener('change', () => {
+      const tuneCb = document.querySelector('#tune-feature-list input[value="'+f+'"]');
+      if (tuneCb) {
+        tuneCb.checked = cb.checked;
+        tuneCb.closest('label').style.opacity = cb.checked ? '1' : '0.4';
+        updateTuneEstimate();
+      }
+      renderSmartSelectBars(_smartData);
+    });
+
+    // ② Status icon
+    const iconSpan = document.createElement('span');
+    iconSpan.style.cssText = 'font-size:10px;flex-shrink:0';
+    iconSpan.textContent = icon;
+
+    // ③ Feature name — click toggles checkbox
+    const nameSpan = document.createElement('span');
+    nameSpan.style.cssText = 'min-width:100px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    nameSpan.textContent = f;
+    nameSpan.addEventListener('click', () => { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); });
+
+    // ④ Bar
+    const barWrap = document.createElement('div');
+    barWrap.style.cssText = 'flex:1;background:var(--border);border-radius:3px;height:12px;min-width:20px';
+    const barFill = document.createElement('div');
+    barFill.style.cssText = 'height:100%;width:'+barW+'%;background:'+color+';border-radius:3px';
+    barWrap.appendChild(barFill);
+
+    // ⑤ Percent
+    const pctSpan = document.createElement('span');
+    pctSpan.style.cssText = 'min-width:38px;font-size:10px;font-family:var(--mono);color:'+color+';text-align:right;flex-shrink:0';
+    pctSpan.textContent = pct + '%';
+
+    row.appendChild(cb);
+    row.appendChild(iconSpan);
+    row.appendChild(nameSpan);
+    row.appendChild(barWrap);
+    row.appendChild(pctSpan);
+    bars.appendChild(row);
+  });
 }
 
 function applySmartSelection() {
@@ -4609,6 +4905,17 @@ window.addEventListener('load', async () => {
     if (_drFound.length) setTimeout(() => showToast('✨ Auto-created ' + _drFound.length + ' derived features: ' + _drFound.join(', '), 'success'), 1000);
   } catch(e) { console.warn('autoload:', e); }
 });
+// Sold zone drag/drop
+const soldZone = document.getElementById('sold-zone');
+if (soldZone) {
+  soldZone.addEventListener('dragover', e => { e.preventDefault(); soldZone.classList.add('drag'); });
+  soldZone.addEventListener('dragleave', () => soldZone.classList.remove('drag'));
+  soldZone.addEventListener('drop', e => {
+    e.preventDefault(); soldZone.classList.remove('drag');
+    const file = e.dataTransfer.files[0];
+    if (file) _uploadFileAs(file, 'sold');
+  });
+}
 </script>
 </body>
 </html>
